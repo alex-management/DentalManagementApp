@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { Input } from '@/components/ui/Input';
 import { PlusCircle, Edit, Trash2, Search, Check, Play, Clock, FileDown, RefreshCcw, Banknote, HardHat, CalendarCheck, XCircle } from 'lucide-react';
 import { Comanda, OrderStatus } from '@/lib/types';
-import { formatDate, formatCurrency, exportComenziToExcel } from '@/lib/utils';
+import { formatDate, formatCurrency } from '@/lib/utils';
 import ConfirmDeleteModal from '@/components/modals/ConfirmDeleteModal';
 import ComandaModal from '@/components/modals/ComandaModal';
 import FinalizeazaComandaModal from '@/components/modals/FinalizeazaComandaModal';
@@ -126,13 +126,35 @@ const Comenzi: React.FC = () => {
         }
     };
 
-    const handleExport = (startDate: Date, endDate: Date) => {
+    const handleExport = async (startDate: Date, endDate: Date) => {
         try {
-            exportComenziToExcel(comenzi, doctori, produse, startDate, endDate);
-            toast.success("Exportul a fost inițiat. Verificați descărcările.");
+            const formatDateForAPI = (date: Date) => date.toISOString().split('T')[0];
+            
+            const response = await fetch('/.netlify/functions/exportLaborator', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    startDate: formatDateForAPI(startDate), 
+                    endDate: formatDateForAPI(endDate) 
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Export failed');
+            }
+            
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'export_laborator.zip';
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            toast.success("Exportul a fost realizat cu succes!");
         } catch (error) {
             console.error("Export failed:", error);
-            toast.error("Exportul a eșuat.");
+            toast.error("Exportul a eșuat. Verificați conexiunea.");
         }
     };
 

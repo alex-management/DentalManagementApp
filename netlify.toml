@@ -5,6 +5,10 @@
   ignore = "false"  # Never skip build
   force = "true"    # Force build even if no changes detected
 
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["@supabase/supabase-js", "exceljs", "archiver", "stream-buffers"]
+
 [build.environment]
   NODE_VERSION = "18"
   CI = "true"       # Ensure we're in CI mode

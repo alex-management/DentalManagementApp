@@ -286,19 +286,11 @@ const ComandaModal: React.FC<ComandaModalProps> = ({ isOpen, onClose, onSave, co
                   setPacientInput(val);
                   setShowPacientSuggestions(true);
                   const trimmed = val.trim().toLowerCase();
-                  // exact match -> select immediately
-                  const exact = pacientiList.find(p => p.nume.toLowerCase() === trimmed);
-                  if (exact) {
-                    setPacientInput(exact.nume);
+                  const exactMatch = pacientiList.find(p => p.nume.toLowerCase() === trimmed);
+                  if (exactMatch) {
+                    setPacientInput(exactMatch.nume);
                     setPacientSearch('');
                     setShowPacientSuggestions(false);
-                  } else {
-                    const options = pacientiList.filter(p => p.nume.toLowerCase().includes(trimmed));
-                    if (trimmed.length >= 2 && options.length === 1) {
-                      setPacientInput(options[0].nume);
-                      setPacientSearch('');
-                      setShowPacientSuggestions(false);
-                    }
                   }
                 }}
                 onFocus={() => setShowPacientSuggestions(true)}
