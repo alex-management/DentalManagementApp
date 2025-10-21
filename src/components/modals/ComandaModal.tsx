@@ -33,6 +33,7 @@ const ComandaModal: React.FC<ComandaModalProps> = ({ isOpen, onClose, onSave, co
   const [termenLimita, setTermenLimita] = useState<Date | undefined>();
   const [reducere, setReducere] = useState<number | string>(0);
   const [selectedTehnician, setSelectedTehnician] = useState('');
+  const [informatii, setInformatii] = useState('');
 
   const isFinalized = useMemo(() => comanda?.status === 'Finalizată', [comanda]);
 
@@ -74,6 +75,7 @@ const ComandaModal: React.FC<ComandaModalProps> = ({ isOpen, onClose, onSave, co
             setTermenLimita(new Date(comanda.termen_limita));
             setReducere(comanda.reducere || 0);
             setSelectedTehnician(comanda.tehnician || '');
+            setInformatii(comanda.informatii || '');
         } else {
       // Reset all fields for creating a new comanda
       setDoctorInput('');
@@ -88,6 +90,7 @@ const ComandaModal: React.FC<ComandaModalProps> = ({ isOpen, onClose, onSave, co
       setTermenLimita(undefined);
       setReducere(0);
       setSelectedTehnician('');
+      setInformatii('');
         }
     }
   }, [comanda, isOpen, doctori]);
@@ -183,6 +186,7 @@ const ComandaModal: React.FC<ComandaModalProps> = ({ isOpen, onClose, onSave, co
       data_start: dataStart.toISOString(),
       termen_limita: termenLimita.toISOString(),
       reducere: Number(reducere) || 0,
+      informatii: informatii.trim() || undefined,
     };
     onSave(comandaData);
     onClose();
@@ -318,6 +322,18 @@ const ComandaModal: React.FC<ComandaModalProps> = ({ isOpen, onClose, onSave, co
               </select>
             </div>
           </div>
+                </div>
+
+                <div className="mt-4">
+                    <Label htmlFor="informatii">Informații suplimentare</Label>
+                    <textarea
+                        id="informatii"
+                        placeholder="Adaugă detalii despre comandă..."
+                        value={informatii}
+                        onChange={(e) => setInformatii(e.target.value)}
+                        disabled={isFinalized}
+                        className="w-full p-2 mt-1 border rounded dark:bg-gray-900 dark:border-gray-600 dark:text-white min-h-[80px] resize-y"
+                    />
                 </div>
 
                 <div className="mt-4">

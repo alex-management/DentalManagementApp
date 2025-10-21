@@ -79,12 +79,14 @@ async function buildWorkbookForDoctor(doctor, rows, imageBuffer) {
     alternate = !alternate;
 
     const startRow = currentRow;
+    let patientTotal = 0;
     for (const p of group.produse) {
       const r = sheet.getRow(currentRow);
       r.getCell(1).value = (currentRow === startRow) ? group.pacient : null;
       r.getCell(2).value = p.nume;
       r.getCell(3).value = p.cantitate;
       const total = Number(p.cantitate) * Number(p.pret_unitar);
+      patientTotal += total;
       r.getCell(4).value = total;
       r.getCell(4).numFmt = '#,##0.00';
 
@@ -111,6 +113,27 @@ async function buildWorkbookForDoctor(doctor, rows, imageBuffer) {
       const mergedCell = sheet.getCell(`A${startRow}`);
       mergedCell.alignment = { vertical: 'middle', horizontal: 'center' };
     }
+
+    const patientTotalRow = sheet.getRow(currentRow);
+    sheet.mergeCells(`A${currentRow}:C${currentRow}`);
+    patientTotalRow.getCell(1).value = 'Total Client';
+    patientTotalRow.getCell(1).font = { bold: true, color: { argb: 'FF333333' } };
+    patientTotalRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    patientTotalRow.getCell(4).value = patientTotal;
+    patientTotalRow.getCell(4).numFmt = '#,##0.00';
+    patientTotalRow.getCell(4).font = { bold: true, color: { argb: 'FF0056B3' } };
+    patientTotalRow.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
+    for (let c = 1; c <= 4; c++) {
+      const cell = patientTotalRow.getCell(c);
+      cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFEF5E7' } };
+      cell.border = {
+        top: {style:'thin', color:{argb:'FFB3B3B3'}},
+        left: {style:'thin', color:{argb:'FFB3B3B3'}},
+        bottom: {style:'thin', color:{argb:'FFB3B3B3'}},
+        right: {style:'thin', color:{argb:'FFB3B3B3'}}
+      };
+    }
+    currentRow++;
   }
 
   const totalRow = sheet.getRow(currentRow + 1);

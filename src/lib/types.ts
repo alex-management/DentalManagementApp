@@ -38,6 +38,7 @@ export interface Comanda {
     data_finalizare?: string;
     status: OrderStatus;
     tehnician?: string;
+    informatii?: string;
     // If true, this order references missing data (doctor/pacient) and should be reviewed
     invalid?: boolean;
 }

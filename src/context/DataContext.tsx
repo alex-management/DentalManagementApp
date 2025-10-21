@@ -253,7 +253,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                   status: (newRow.status as any) || (new Date(newRow.termen_limita) < new Date() ? 'Întârziată' : 'În progres'),
                   tehnician: newRow.tehnician || undefined,
                 };
-                setComenzi(prev => (prev.some(x => x.id === nc.id) ? prev : [...prev, nc]));
+                setComenzi(prev => [nc, ...prev.filter(x => x.id !== nc.id)]);
               }
             } else if (event === 'UPDATE') {
               const doctorExists = doctoriRef.current.some(d => d.id === Number(newRow.id_doctor));
@@ -633,7 +633,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             total,
             status: new Date(comandaData.termen_limita) < new Date() ? 'Întârziată' : 'În progres',
           };
-          setComenzi(prev => (prev.some(c => c.id === newComanda.id) ? prev : [...prev, newComanda]));
+          setComenzi(prev => [newComanda, ...prev.filter(c => c.id !== newComanda.id)]);
           toast.success('Comanda a fost creata cu succes');
         } catch (err) {
           console.error('Supabase addComanda error:', err);
@@ -660,7 +660,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             total,
             status: new Date(comandaData.termen_limita) < new Date() ? 'Întârziată' : 'În progres',
           };
-          setComenzi(prev => (prev.some(c => c.id === newComanda.id) ? prev : [...prev, newComanda]));
+          setComenzi(prev => [newComanda, ...prev.filter(c => c.id !== newComanda.id)]);
           toast.error('Eroare la salvarea comenzii în Supabase. Se folosește stocarea locală.');
         }
       })();
@@ -673,7 +673,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         total,
         status: new Date(comandaData.termen_limita) < new Date() ? 'Întârziată' : 'În progres',
       };
-  setComenzi(prev => (prev.some(c => c.id === newComanda.id) ? prev : [...prev, newComanda]));
+  setComenzi(prev => [newComanda, ...prev.filter(c => c.id !== newComanda.id)]);
   toast.success('Comanda a fost creata cu succes');
     }
     return { newDoctor, newPacient };
