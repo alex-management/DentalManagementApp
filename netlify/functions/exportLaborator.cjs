@@ -74,6 +74,7 @@ async function buildWorkbookForDoctor(doctor, rows, imageBuffer) {
   let currentRow = 6;
 
   let alternate = false;
+  const productRows = [];
   for (const group of rows) {
     const bgColor = alternate ? 'FFFAFAFA' : 'FFFFFFFF';
     alternate = !alternate;
@@ -89,6 +90,8 @@ async function buildWorkbookForDoctor(doctor, rows, imageBuffer) {
       patientTotal += total;
       r.getCell(4).value = total;
       r.getCell(4).numFmt = '#,##0.00';
+
+      productRows.push(currentRow);
 
       for (let c = 1; c <= 4; c++) {
         const cell = r.getCell(c);
@@ -116,7 +119,7 @@ async function buildWorkbookForDoctor(doctor, rows, imageBuffer) {
 
     const patientTotalRow = sheet.getRow(currentRow);
     sheet.mergeCells(`A${currentRow}:C${currentRow}`);
-    patientTotalRow.getCell(1).value = 'Total Client';
+    patientTotalRow.getCell(1).value = 'Total pacient:';
     patientTotalRow.getCell(1).font = { bold: true, color: { argb: 'FF333333' } };
     patientTotalRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
     patientTotalRow.getCell(4).value = patientTotal;
@@ -141,7 +144,9 @@ async function buildWorkbookForDoctor(doctor, rows, imageBuffer) {
   totalRow.getCell(1).font = { bold: true };
   totalRow.getCell(1).alignment = { horizontal: 'right' };
   totalRow.getCell(3).value = null;
-  totalRow.getCell(4).value = { formula: `SUM(D6:D${currentRow - 1})` };
+  
+  const rangeFormula = productRows.map(row => `D${row}`).join('+');
+  totalRow.getCell(4).value = { formula: rangeFormula };
   totalRow.getCell(4).numFmt = '#,##0.00';
   for (let c = 1; c <= 4; c++) {
     const cell = totalRow.getCell(c);

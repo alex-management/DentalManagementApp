@@ -122,6 +122,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           data_finalizare: r.data_finalizare || undefined,
           status: (r.status as any) || (new Date(r.termen_limita) < new Date() ? 'Întârziată' : 'În progres'),
           tehnician: r.tehnician || undefined,
+          informatii: r.informatii || undefined,
         } as Comanda));
 
         // Keep all loaded comenzi as-is (do not mark or delete), even if related doctor/pacient rows are missing
@@ -234,6 +235,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                     data_finalizare: newRow.data_finalizare || undefined,
                     status: (newRow.status as any) || (new Date(newRow.termen_limita) < new Date() ? 'Întârziată' : 'În progres'),
                     tehnician: newRow.tehnician || undefined,
+                    informatii: newRow.informatii || undefined,
                     invalid: true,
                   };
                   setComenzi(prev => (prev.some(x => x.id === nc.id) ? prev : [...prev, nc]));
@@ -252,6 +254,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                   data_finalizare: newRow.data_finalizare || undefined,
                   status: (newRow.status as any) || (new Date(newRow.termen_limita) < new Date() ? 'Întârziată' : 'În progres'),
                   tehnician: newRow.tehnician || undefined,
+                  informatii: newRow.informatii || undefined,
                 };
                 setComenzi(prev => [nc, ...prev.filter(x => x.id !== nc.id)]);
               }
@@ -261,10 +264,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
               if (!doctorExists || !pacientExists) {
                 const badId = Number(newRow.id);
                 console.warn('Realtime UPDATE comanda references missing doctor/pacient, marking invalid id=', badId);
-                setComenzi(prev => prev.map(c => c.id === badId ? { ...c, invalid: true, id_doctor: Number(newRow.id_doctor), id_pacient: Number(newRow.id_pacient), data_start: newRow.data_start, termen_limita: newRow.termen_limita, reducere: Number(newRow.reducere || 0), total: Number(newRow.total || 0), data_finalizare: newRow.data_finalizare || undefined, status: newRow.status || c.status, tehnician: newRow.tehnician || c.tehnician } : c));
+                setComenzi(prev => prev.map(c => c.id === badId ? { ...c, invalid: true, id_doctor: Number(newRow.id_doctor), id_pacient: Number(newRow.id_pacient), data_start: newRow.data_start, termen_limita: newRow.termen_limita, reducere: Number(newRow.reducere || 0), total: Number(newRow.total || 0), data_finalizare: newRow.data_finalizare || undefined, status: newRow.status || c.status, tehnician: newRow.tehnician || c.tehnician, informatii: newRow.informatii || c.informatii } : c));
                 // invalid comanda detected on update; do not show a toast here
               } else {
-                setComenzi(prev => prev.map(c => c.id === Number(newRow.id) ? { ...c, id_doctor: Number(newRow.id_doctor), id_pacient: Number(newRow.id_pacient), data_start: newRow.data_start, termen_limita: newRow.termen_limita, reducere: Number(newRow.reducere || 0), total: Number(newRow.total || 0), data_finalizare: newRow.data_finalizare || undefined, status: newRow.status || c.status, tehnician: newRow.tehnician || c.tehnician } : c));
+                setComenzi(prev => prev.map(c => c.id === Number(newRow.id) ? { ...c, id_doctor: Number(newRow.id_doctor), id_pacient: Number(newRow.id_pacient), data_start: newRow.data_start, termen_limita: newRow.termen_limita, reducere: Number(newRow.reducere || 0), total: Number(newRow.total || 0), data_finalizare: newRow.data_finalizare || undefined, status: newRow.status || c.status, tehnician: newRow.tehnician || c.tehnician, informatii: newRow.informatii || c.informatii } : c));
               }
             } else if (event === 'DELETE') {
               setComenzi(prev => prev.filter(c => c.id !== Number(oldRow.id)));
@@ -599,7 +602,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           }
 
           // Insert comanda
-          const { data: comandaRows, error: comandaError } = await supabase!.from('comenzi').insert([{ id_doctor: finalDoctorId, id_pacient: finalPacientId, data_start: comandaData.data_start, termen_limita: comandaData.termen_limita, reducere: comandaData.reducere || 0, total, status: new Date(comandaData.termen_limita) < new Date() ? 'Întârziată' : 'În progres' }]).select().single();
+          const { data: comandaRows, error: comandaError } = await supabase!.from('comenzi').insert([{ id_doctor: finalDoctorId, id_pacient: finalPacientId, data_start: comandaData.data_start, termen_limita: comandaData.termen_limita, reducere: comandaData.reducere || 0, total, status: new Date(comandaData.termen_limita) < new Date() ? 'Întârziată' : 'În progres', informatii: comandaData.informatii }]).select().single();
           if (comandaError) throw comandaError;
           const insertedComanda: any = comandaRows ? comandaRows : null;
           const comandaId = Number(insertedComanda?.id ?? Date.now());
@@ -691,7 +694,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     if (supabase) {
       (async () => {
         try {
-          const { error } = await supabase.from('comenzi').update({ id_doctor: finalComanda.id_doctor, id_pacient: finalComanda.id_pacient, data_start: finalComanda.data_start, termen_limita: finalComanda.termen_limita, reducere: finalComanda.reducere, total }).eq('id', finalComanda.id);
+          const { error } = await supabase.from('comenzi').update({ id_doctor: finalComanda.id_doctor, id_pacient: finalComanda.id_pacient, data_start: finalComanda.data_start, termen_limita: finalComanda.termen_limita, reducere: finalComanda.reducere, total, informatii: finalComanda.informatii }).eq('id', finalComanda.id);
           if (error) throw error;
           // Replace comanda_produse: delete existing then insert new
           await supabase.from('comanda_produse').delete().eq('comanda_id', finalComanda.id);

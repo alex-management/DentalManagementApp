@@ -69,7 +69,8 @@ const Comenzi: React.FC = () => {
                 const tehnicianMatch = !appliedFilters.tehnician || (c.tehnician && c.tehnician.toLowerCase().includes(appliedFilters.tehnician.toLowerCase()));
 
                 return doctorMatch && pacientMatch && tehnicianMatch;
-            });
+            })
+            .sort((a, b) => new Date(b.data_start).getTime() - new Date(a.data_start).getTime());
     }, [comenzi, statusFilter, appliedFilters, doctori]);
     
     const progressStats = useMemo(() => {

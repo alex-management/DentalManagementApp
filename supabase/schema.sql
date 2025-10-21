@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS public.comenzi (
   data_finalizare TIMESTAMP WITH TIME ZONE,
   status TEXT,
   tehnician TEXT,
+  informatii TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
