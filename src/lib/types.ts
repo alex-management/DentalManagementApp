@@ -40,6 +40,8 @@ export interface Comanda {
     tehnician?: string;
     informatii?: string;
     created_at?: string;
+    facturata?: boolean;
+    data_facturare?: string;
     // If true, this order references missing data (doctor/pacient) and should be reviewed
     invalid?: boolean;
 }

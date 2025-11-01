@@ -36,6 +36,8 @@ const ComandaModal: React.FC<ComandaModalProps> = ({ isOpen, onClose, onSave, co
   const [informatii, setInformatii] = useState('');
 
   const isFinalized = useMemo(() => comanda?.status === 'Finalizată', [comanda]);
+  const isInvoiced = useMemo(() => comanda?.facturata === true, [comanda]);
+  const isReadOnly = isFinalized || isInvoiced;
 
   const pacientiList = useMemo(() => {
     if (typeof selectedDoctorId !== 'number') return [];
@@ -201,7 +203,7 @@ const ComandaModal: React.FC<ComandaModalProps> = ({ isOpen, onClose, onSave, co
             <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
               <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 p-6 text-left align-middle shadow-xl transition-all">
                 <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-50 flex justify-between items-center">
-                  <span>{comanda ? (isFinalized ? 'Vizualizare / Modificare Tehnician' : 'Editează Comanda') : 'Adaugă Comanda'}</span>
+                  <span>{comanda ? (isInvoiced ? 'Vizualizare Comandă (Facturată)' : isFinalized ? 'Vizualizare / Modificare Tehnician' : 'Editează Comanda') : 'Adaugă Comanda'}</span>
                   <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"><X size={20} /></button>
                 </Dialog.Title>
                 
@@ -214,6 +216,7 @@ const ComandaModal: React.FC<ComandaModalProps> = ({ isOpen, onClose, onSave, co
                 id="doctor-combobox"
                 placeholder="Alege sau tastează doctor..."
                 value={doctorSearch || doctorInput}
+                disabled={isReadOnly}
                 onChange={e => {
                   const val = e.target.value;
                   setDoctorSearch(val);
@@ -303,7 +306,7 @@ const ComandaModal: React.FC<ComandaModalProps> = ({ isOpen, onClose, onSave, co
                 name="pacient-combobox"
                 autoCorrect="off"
                 spellCheck={false}
-                disabled={isFinalized || (!selectedDoctorId && doctorInput.trim() === '')}
+                disabled={isReadOnly || (!selectedDoctorId && doctorInput.trim() === '')}
               />
               {showPacientSuggestions && (
                 <ul style={{ WebkitOverflowScrolling: 'touch', touchAction: 'auto' }} className="absolute left-0 right-0 z-50 w-full bg-white dark:bg-gray-900 border rounded mt-1 max-h-56 md:max-h-64 overflow-auto text-gray-900 dark:text-white shadow">
@@ -341,20 +344,20 @@ const ComandaModal: React.FC<ComandaModalProps> = ({ isOpen, onClose, onSave, co
           <div className="space-y-2 rounded-md border dark:border-gray-600 p-2">
                         {selectedProduse.map((p, index) => (
                             <div key={index} className="flex items-center gap-2">
-                <select value={p.id_produs} onChange={e => handleProdusChange(index, Number(e.target.value))} className="flex-grow p-2 border rounded dark:bg-gray-900 dark:border-gray-600 dark:text-white" disabled={isFinalized}>
+                <select value={p.id_produs} onChange={e => handleProdusChange(index, Number(e.target.value))} className="flex-grow p-2 border rounded dark:bg-gray-900 dark:border-gray-600 dark:text-white" disabled={isReadOnly}>
                   {allProduse.map(prod => <option key={prod.id} value={prod.id}>{prod.nume}</option>)}
                 </select>
-        <Input type="number" value={p.cantitate as any} onChange={e => handleCantitateChange(index, e.target.value)} className="w-20" min="0" disabled={isFinalized} />
-                                {!isFinalized && <Button variant="ghost" size="icon" onClick={() => handleRemoveProdus(index)}><Trash2 className="w-4 h-4 text-danger"/></Button>}
+        <Input type="number" value={p.cantitate as any} onChange={e => handleCantitateChange(index, e.target.value)} className="w-20" min="0" disabled={isReadOnly} />
+                                {!isReadOnly && <Button variant="ghost" size="icon" onClick={() => handleRemoveProdus(index)}><Trash2 className="w-4 h-4 text-danger"/></Button>}
                             </div>
                         ))}
-                        {!isFinalized && <Button variant="outline" size="sm" onClick={handleAddProdus} className="w-full dark:text-white"><PlusCircle className="w-4 h-4 mr-2"/>Adaugă Produs</Button>}
+                        {!isReadOnly && <Button variant="outline" size="sm" onClick={handleAddProdus} className="w-full dark:text-white"><PlusCircle className="w-4 h-4 mr-2"/>Adaugă Produs</Button>}
                     </div>
                 </div>
 
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div><Label>Data Start</Label><DatePicker date={dataStart} setDate={setDataStart} disabled={isFinalized} /></div>
-                    <div><Label>Termen Limită</Label><DatePicker date={termenLimita} setDate={setTermenLimita} disabled={isFinalized} /></div>
+                    <div><Label>Data Start</Label><DatePicker date={dataStart} setDate={setDataStart} disabled={isReadOnly} /></div>
+                    <div><Label>Termen Limită</Label><DatePicker date={termenLimita} setDate={setTermenLimita} disabled={isReadOnly} /></div>
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-4 items-end">
@@ -366,7 +369,7 @@ const ComandaModal: React.FC<ComandaModalProps> = ({ isOpen, onClose, onSave, co
                             value={reducere} 
                             onChange={e => setReducere(e.target.value)} 
                             onFocus={(e) => e.target.select()}
-                            disabled={isFinalized} 
+                            disabled={isReadOnly} 
                         />
                     </div>
                     <div className="text-right">
@@ -375,7 +378,7 @@ const ComandaModal: React.FC<ComandaModalProps> = ({ isOpen, onClose, onSave, co
                     </div>
                 </div>
 
-                {isFinalized && (
+                {isFinalized && !isInvoiced && (
                     <div className="mt-6 pt-4 border-t dark:border-gray-600">
                         <Label htmlFor="tehnician-select">Modifică Tehnician</Label>
                         <select id="tehnician-select" value={selectedTehnician} onChange={(e) => setSelectedTehnician(e.target.value)} className="w-full p-2 mt-1 border rounded dark:bg-gray-900 dark:border-gray-600 dark:text-white">
@@ -388,8 +391,8 @@ const ComandaModal: React.FC<ComandaModalProps> = ({ isOpen, onClose, onSave, co
                 )}
 
                 <div className="mt-6 flex justify-end space-x-3">
-                  <Button variant="secondary" onClick={onClose}>Anulează</Button>
-                  <Button onClick={handleSave}>{isFinalized ? 'Salvează Tehnician' : 'Salvează Comanda'}</Button>
+                  <Button variant="secondary" onClick={onClose}>{isInvoiced ? 'Închide' : 'Anulează'}</Button>
+                  {!isInvoiced && <Button onClick={handleSave}>{isFinalized ? 'Salvează Tehnician' : 'Salvează Comanda'}</Button>}
                 </div>
               </Dialog.Panel>
             </Transition.Child>
