@@ -118,7 +118,7 @@ async function buildWorkbookForDoctor(doctor, rows, imageBuffer) {
 
     const patientTotalRow = sheet.getRow(currentRow);
     sheet.mergeCells(`A${currentRow}:C${currentRow}`);
-    patientTotalRow.getCell(1).value = 'Total Client';
+    patientTotalRow.getCell(1).value = 'Total Pacient';
     patientTotalRow.getCell(1).font = { bold: true, color: { argb: 'FF333333' } };
     patientTotalRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
     patientTotalRow.getCell(4).value = patientTotal;
