@@ -69,6 +69,11 @@ const Comenzi: React.FC = () => {
                 const tehnicianMatch = !appliedFilters.tehnician || (c.tehnician && c.tehnician.toLowerCase().includes(appliedFilters.tehnician.toLowerCase()));
 
                 return doctorMatch && pacientMatch && tehnicianMatch;
+            })
+            .sort((a, b) => {
+                if (!a.created_at) return 1;
+                if (!b.created_at) return -1;
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
             });
     }, [comenzi, statusFilter, appliedFilters, doctori]);
     

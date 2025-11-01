@@ -122,10 +122,16 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           data_finalizare: r.data_finalizare || undefined,
           status: (r.status as any) || (new Date(r.termen_limita) < new Date() ? 'Întârziată' : 'În progres'),
           tehnician: r.tehnician || undefined,
+          created_at: r.created_at || undefined,
         } as Comanda));
 
         // Keep all loaded comenzi as-is (do not mark or delete), even if related doctor/pacient rows are missing
-        const filteredComenzi = (loadedComenzi || []);
+        // Sort by created_at descending (most recent first)
+        const filteredComenzi = (loadedComenzi || []).sort((a, b) => {
+          if (!a.created_at) return 1;
+          if (!b.created_at) return -1;
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
 
         // update local state
   setProduse(loadedProduse.length ? loadedProduse.sort((a,b) => a.nume.localeCompare(b.nume, 'ro')) : MOCK_PRODUSE);
@@ -234,6 +240,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                     data_finalizare: newRow.data_finalizare || undefined,
                     status: (newRow.status as any) || (new Date(newRow.termen_limita) < new Date() ? 'Întârziată' : 'În progres'),
                     tehnician: newRow.tehnician || undefined,
+                    created_at: newRow.created_at || undefined,
                     invalid: true,
                   };
                   setComenzi(prev => (prev.some(x => x.id === nc.id) ? prev : [...prev, nc]));
@@ -252,6 +259,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                   data_finalizare: newRow.data_finalizare || undefined,
                   status: (newRow.status as any) || (new Date(newRow.termen_limita) < new Date() ? 'Întârziată' : 'În progres'),
                   tehnician: newRow.tehnician || undefined,
+                  created_at: newRow.created_at || undefined,
                 };
                 setComenzi(prev => [nc, ...prev.filter(x => x.id !== nc.id)]);
               }
@@ -632,6 +640,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             id_pacient: finalPacientId,
             total,
             status: new Date(comandaData.termen_limita) < new Date() ? 'Întârziată' : 'În progres',
+            created_at: insertedComanda?.created_at || new Date().toISOString(),
           };
           setComenzi(prev => [newComanda, ...prev.filter(c => c.id !== newComanda.id)]);
           toast.success('Comanda a fost creata cu succes');
@@ -659,6 +668,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             id_pacient: finalPacientId,
             total,
             status: new Date(comandaData.termen_limita) < new Date() ? 'Întârziată' : 'În progres',
+            created_at: new Date().toISOString(),
           };
           setComenzi(prev => [newComanda, ...prev.filter(c => c.id !== newComanda.id)]);
           toast.error('Eroare la salvarea comenzii în Supabase. Se folosește stocarea locală.');
@@ -672,6 +682,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         id_pacient: finalPacientId,
         total,
         status: new Date(comandaData.termen_limita) < new Date() ? 'Întârziată' : 'În progres',
+        created_at: new Date().toISOString(),
       };
   setComenzi(prev => [newComanda, ...prev.filter(c => c.id !== newComanda.id)]);
   toast.success('Comanda a fost creata cu succes');
