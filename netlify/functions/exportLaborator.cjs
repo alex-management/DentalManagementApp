@@ -72,6 +72,7 @@ async function buildWorkbookForDoctor(doctor, rows, imageBuffer) {
   });
 
   let currentRow = 6;
+  const productRows = [];
 
   let alternate = false;
   for (const group of rows) {
@@ -81,6 +82,7 @@ async function buildWorkbookForDoctor(doctor, rows, imageBuffer) {
     const startRow = currentRow;
     let patientTotal = 0;
     for (const p of group.produse) {
+      productRows.push(currentRow);
       const r = sheet.getRow(currentRow);
       r.getCell(1).value = (currentRow === startRow) ? group.pacient : null;
       r.getCell(2).value = p.nume;
@@ -141,7 +143,8 @@ async function buildWorkbookForDoctor(doctor, rows, imageBuffer) {
   totalRow.getCell(1).font = { bold: true };
   totalRow.getCell(1).alignment = { horizontal: 'right' };
   totalRow.getCell(3).value = null;
-  totalRow.getCell(4).value = { formula: `SUM(D6:D${currentRow - 1})` };
+  const sumFormula = productRows.map(r => `D${r}`).join('+');
+  totalRow.getCell(4).value = { formula: sumFormula };
   totalRow.getCell(4).numFmt = '#,##0.00';
   for (let c = 1; c <= 4; c++) {
     const cell = totalRow.getCell(c);
