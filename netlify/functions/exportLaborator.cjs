@@ -167,15 +167,15 @@ async function getGroupedDataForDoctor(doctorId, startDate, endDate) {
     .select(`
       id,
       id_pacient,
-      data_finalizare,
+      termen_limita,
       status,
       pacienti!inner(id, nume)
     `)
     .eq('id_doctor', doctorId)
     .eq('status', 'Finalizată')
-    .gte('data_finalizare', startDate)
-    .lte('data_finalizare', endDate)
-    .not('data_finalizare', 'is', null);
+    .gte('termen_limita', startDate)
+    .lte('termen_limita', endDate)
+    .not('termen_limita', 'is', null);
 
   if (err1) throw err1;
   if (!comenzi || comenzi.length === 0) return [];
