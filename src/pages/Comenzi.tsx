@@ -3,9 +3,9 @@ import { useData } from '@/context/DataContext';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
-import { PlusCircle, Edit, Trash2, Search, Check, Play, Clock, FileDown, RefreshCcw, Banknote, HardHat, CalendarCheck, XCircle } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Search, Check, Play, Clock, FileDown, RefreshCcw, Banknote, HardHat, CalendarCheck, XCircle, Printer } from 'lucide-react';
 import { Comanda, OrderStatus } from '@/lib/types';
-import { formatDate, formatCurrency, exportComenziToExcel } from '@/lib/utils';
+import { formatDate, formatCurrency, exportComenziToExcel, generateOrderWordDocument } from '@/lib/utils';
 import ConfirmDeleteModal from '@/components/modals/ConfirmDeleteModal';
 import ComandaModal from '@/components/modals/ComandaModal';
 import FinalizeazaComandaModal from '@/components/modals/FinalizeazaComandaModal';
@@ -136,6 +136,18 @@ const Comenzi: React.FC = () => {
         }
     };
 
+    const handlePrintOrder = async (comanda: Comanda) => {
+        try {
+            const doctor = doctori.find(d => d.id === comanda.id_doctor);
+            const pacient = doctor?.pacienti.find(p => p.id === comanda.id_pacient);
+            await generateOrderWordDocument(comanda, doctor, pacient, produse);
+            toast.success("Documentul a fost generat cu succes.");
+        } catch (error) {
+            console.error("Print failed:", error);
+            toast.error("Generarea documentului a eșuat.");
+        }
+    };
+
     return (
         <div className="space-y-6">
             <Card>
@@ -214,6 +226,7 @@ const Comenzi: React.FC = () => {
                                 ) : (
                                     <Button variant="outline" size="sm" onClick={() => { setSelectedComanda(comanda); setFinalizeModalOpen(true); }}>Finalizează</Button>
                                 )}
+                                <Button variant="outline" size="sm" onClick={() => handlePrintOrder(comanda)}><Printer className="w-4 h-4 mr-2"/>Imprimare</Button>
                                 <Button variant="ghost" size="icon" onClick={() => { setSelectedComanda(comanda); setComandaModalOpen(true); }}><Edit className="w-4 h-4" /></Button>
                                 <Button variant="ghost" size="icon" onClick={() => { setSelectedComanda(comanda); setDeleteModalOpen(true); }}><Trash2 className="w-4 h-4 text-danger" /></Button>
                             </CardFooter>
@@ -260,6 +273,7 @@ const Comenzi: React.FC = () => {
                                                     ) : (
                                                         <Button variant="outline" size="sm" onClick={() => { setSelectedComanda(comanda); setFinalizeModalOpen(true); }}>Finalizează</Button>
                                                     )}
+                                                    <Button variant="outline" size="sm" onClick={() => handlePrintOrder(comanda)}><Printer className="w-4 h-4 mr-2"/>Imprimare</Button>
                                                     <Button variant="ghost" size="icon" onClick={() => { setSelectedComanda(comanda); setComandaModalOpen(true); }}><Edit className="w-4 h-4" /></Button>
                                                     <Button variant="ghost" size="icon" onClick={() => { setSelectedComanda(comanda); setDeleteModalOpen(true); }}><Trash2 className="w-4 h-4 text-danger" /></Button>
                                                 </td>

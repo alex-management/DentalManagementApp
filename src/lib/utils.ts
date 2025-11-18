@@ -3,7 +3,9 @@ import { twMerge } from "tailwind-merge"
 import { format, isWithinInterval, parseISO } from 'date-fns';
 import { ro } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
-import { Comanda, Doctor, Produs } from "./types";
+import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from 'docx';
+import { saveAs } from 'file-saver';
+import { Comanda, Doctor, Produs, Pacient } from "./types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -158,4 +160,83 @@ export const exportComenziToExcel = (
         const filename = `${doctor.nume.replace(/\s/g, '_')}_${format(startDate, 'dd-MM-yyyy')}_${format(endDate, 'dd-MM-yyyy')}.xlsx`;
         XLSX.writeFile(wb, filename);
     }
+};
+
+export const generateOrderWordDocument = async (
+    comanda: Comanda,
+    doctor: Doctor | undefined,
+    pacient: Pacient | undefined,
+    produse: Produs[]
+) => {
+    const doc = new Document({
+        sections: [{
+            properties: {},
+            children: [
+                new Paragraph({
+                    text: 'Fisa Laborator',
+                    heading: HeadingLevel.HEADING_1,
+                    alignment: AlignmentType.CENTER,
+                    spacing: { after: 400 },
+                }),
+                new Paragraph({
+                    children: [
+                        new TextRun({
+                            text: 'Nume Doctor: ',
+                            bold: true,
+                        }),
+                        new TextRun({
+                            text: doctor?.nume || 'N/A',
+                        }),
+                    ],
+                    spacing: { after: 200 },
+                }),
+                new Paragraph({
+                    children: [
+                        new TextRun({
+                            text: 'Nume Pacient: ',
+                            bold: true,
+                        }),
+                        new TextRun({
+                            text: pacient?.nume || 'N/A',
+                        }),
+                    ],
+                    spacing: { after: 400 },
+                }),
+                new Paragraph({
+                    text: 'Produse:',
+                    heading: HeadingLevel.HEADING_2,
+                    spacing: { after: 200 },
+                }),
+                ...comanda.produse.map((comandaProdus) => {
+                    const produs = produse.find(p => p.id === comandaProdus.id_produs);
+                    return new Paragraph({
+                        text: `• ${produs?.nume || 'N/A'} (${comandaProdus.cantitate}x - ${formatCurrency((produs?.pret || 0) * comandaProdus.cantitate)})`,
+                        spacing: { after: 100 },
+                    });
+                }),
+                new Paragraph({
+                    text: '',
+                    spacing: { after: 200 },
+                }),
+                new Paragraph({
+                    children: [
+                        new TextRun({
+                            text: 'Total: ',
+                            bold: true,
+                            size: 28,
+                        }),
+                        new TextRun({
+                            text: formatCurrency(comanda.total),
+                            size: 28,
+                        }),
+                    ],
+                    spacing: { before: 200 },
+                }),
+            ],
+        }],
+    });
+
+    const blob = await Packer.toBlob(doc);
+    const filename = `Fisa_Laborator_${doctor?.nume.replace(/\s/g, '_')}_${pacient?.nume.replace(/\s/g, '_')}_${comanda.id}.docx`;
+    saveAs(blob, filename);
 };
