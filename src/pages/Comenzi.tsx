@@ -3,7 +3,7 @@ import { useData } from '@/context/DataContext';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
-import { PlusCircle, Edit, Trash2, Search, Check, Play, Clock, FileDown, RefreshCcw, Banknote, HardHat, CalendarCheck, XCircle, Receipt } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Search, Check, Play, Clock, FileDown, RefreshCcw, Banknote, HardHat, CalendarCheck, XCircle, Receipt, Printer } from 'lucide-react';
 import { Comanda, OrderStatus } from '@/lib/types';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import ConfirmDeleteModal from '@/components/modals/ConfirmDeleteModal';
@@ -173,6 +173,33 @@ const Comenzi: React.FC = () => {
         }
     };
 
+    const handlePrintOrder = async (orderId: number) => {
+        try {
+            const response = await fetch('/.netlify/functions/printOrder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Print failed');
+            }
+            
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Comanda_${orderId}.xlsx`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            toast.success("Fișierul a fost generat cu succes!");
+        } catch (error) {
+            console.error("Print failed:", error);
+            toast.error("Generarea fișierului a eșuat.");
+        }
+    };
+
     return (
         <div className="space-y-6">
             <Card>
@@ -247,6 +274,9 @@ const Comenzi: React.FC = () => {
                                 {comanda.tehnician && <div className="flex items-center"><HardHat className="w-4 h-4 mr-2 text-gray-500"/> <strong>Tehnician:</strong><span className="ml-auto">{comanda.tehnician}</span></div>}
                             </CardContent>
                             <CardFooter className="flex justify-end gap-2">
+                                <Button variant="outline" size="sm" onClick={() => handlePrintOrder(comanda.id)}>
+                                    <Printer className="w-4 h-4 mr-2"/>Imprimare
+                                </Button>
                                 {isFinalized && !isInvoiced && (
                                     <Button variant="default" size="sm" onClick={() => { setSelectedComanda(comanda); setInvoiceModalOpen(true); }}>
                                         <Receipt className="w-4 h-4 mr-2"/>Factureaza
@@ -299,6 +329,9 @@ const Comenzi: React.FC = () => {
                                                 </td>
                                                 <td className="px-6 py-4">{comanda.tehnician || 'N/A'}</td>
                                                 <td className="px-6 py-4 flex items-center gap-1">
+                                                    <Button variant="outline" size="sm" onClick={() => handlePrintOrder(comanda.id)}>
+                                                        <Printer className="w-4 h-4 mr-2"/>Imprimare
+                                                    </Button>
                                                     {isFinalized && !isInvoiced && (
                                                         <Button variant="default" size="sm" onClick={() => { setSelectedComanda(comanda); setInvoiceModalOpen(true); }}>
                                                             <Receipt className="w-4 h-4 mr-2"/>Factureaza
