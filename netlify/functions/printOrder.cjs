@@ -64,21 +64,47 @@ exports.handler = async function(event, context) {
 
     sheet.getCell('A1').value = 'Fisa Laborator';
     sheet.getCell('A1').font = { size: 14, bold: true };
-    sheet.getCell('A1').alignment = { horizontal: 'left', vertical: 'middle' };
+    sheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F4F8' } };
+    sheet.getCell('A1').border = {
+      top: { style: 'thick' },
+      left: { style: 'thick' },
+      bottom: { style: 'thin' },
+      right: { style: 'thick' }
+    };
 
     const doctorName = comanda.doctori?.nume || 'N/A';
-    sheet.getCell('A2').value = `Nume Doctor: ${doctorName}`;
+    sheet.getCell('A2').value = `Doctor: ${doctorName}`;
     sheet.getCell('A2').font = { size: 12 };
-    sheet.getCell('A2').alignment = { horizontal: 'left', vertical: 'middle' };
+    sheet.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getCell('A2').border = {
+      top: { style: 'thin' },
+      left: { style: 'thick' },
+      bottom: { style: 'thin' },
+      right: { style: 'thick' }
+    };
 
     const pacientName = comanda.pacienti?.nume || 'N/A';
-    sheet.getCell('A3').value = `Nume Pacient: ${pacientName}`;
+    sheet.getCell('A3').value = `Pacient: ${pacientName}`;
     sheet.getCell('A3').font = { size: 12 };
-    sheet.getCell('A3').alignment = { horizontal: 'left', vertical: 'middle' };
+    sheet.getCell('A3').alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getCell('A3').border = {
+      top: { style: 'thin' },
+      left: { style: 'thick' },
+      bottom: { style: 'thin' },
+      right: { style: 'thick' }
+    };
 
     sheet.getCell('A4').value = 'Produse';
     sheet.getCell('A4').font = { size: 12, bold: true };
     sheet.getCell('A4').alignment = { horizontal: 'left', vertical: 'middle' };
+    sheet.getCell('A4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF4E6' } };
+    sheet.getCell('A4').border = {
+      top: { style: 'thin' },
+      left: { style: 'thick' },
+      bottom: { style: 'thin' },
+      right: { style: 'thick' }
+    };
 
     let currentRow = 5;
     for (const item of comandaProduse || []) {
@@ -86,12 +112,25 @@ exports.handler = async function(event, context) {
       sheet.getCell(`A${currentRow}`).value = `- ${productName}`;
       sheet.getCell(`A${currentRow}`).font = { size: 11 };
       sheet.getCell(`A${currentRow}`).alignment = { horizontal: 'left', vertical: 'middle' };
+      sheet.getCell(`A${currentRow}`).border = {
+        top: { style: 'thin' },
+        left: { style: 'thick' },
+        bottom: { style: 'thin' },
+        right: { style: 'thick' }
+      };
       currentRow++;
     }
 
     sheet.getCell(`A${currentRow}`).value = `Total: ${comanda.total}`;
     sheet.getCell(`A${currentRow}`).font = { size: 12, bold: true };
-    sheet.getCell(`A${currentRow}`).alignment = { horizontal: 'left', vertical: 'middle' };
+    sheet.getCell(`A${currentRow}`).alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getCell(`A${currentRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E9' } };
+    sheet.getCell(`A${currentRow}`).border = {
+      top: { style: 'thin' },
+      left: { style: 'thick' },
+      bottom: { style: 'thick' },
+      right: { style: 'thick' }
+    };
 
     const fileBuffer = await workbook.xlsx.writeBuffer();
     const base64 = fileBuffer.toString('base64');
