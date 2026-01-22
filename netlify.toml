@@ -5,6 +5,10 @@
   ignore = "false"  # Never skip build
   force = "true"    # Force build even if no changes detected
 
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["@supabase/supabase-js", "exceljs", "archiver", "stream-buffers"]
+
 [build.environment]
   NODE_VERSION = "18"
   CI = "true"       # Ensure we're in CI mode
@@ -13,6 +17,9 @@
   # embedded in the client bundle (Supabase anon key + public URL).
   # These are public client-side values; do NOT put private keys here.
   SECRETS_SCAN_OMIT_KEYS = "VITE_SUPABASE_ANON_KEY,VITE_SUPABASE_URL"
+  # Exclude documentation files with example credentials from secrets scanning
+  # Also exclude dist/ and .netlify/ build artifacts which contain bundled library code
+  SECRETS_SCAN_OMIT_PATHS = "supabase/import-schema.ps1,supabase/README.md,.github/copilot-instructions.md,dist/**,dist/assets/**,.netlify/**"
 
 [build.processing]
   skip_processing = false  # Ensure processing is not skipped

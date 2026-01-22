@@ -3,14 +3,15 @@ import { useData } from '@/context/DataContext';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
-import { PlusCircle, Edit, Trash2, Search, Check, Play, Clock, FileDown, RefreshCcw, Banknote, HardHat, CalendarCheck, XCircle } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Search, Check, Play, Clock, FileDown, RefreshCcw, Banknote, HardHat, CalendarCheck, XCircle, Receipt, Printer } from 'lucide-react';
 import { Comanda, OrderStatus } from '@/lib/types';
-import { formatDate, formatCurrency, exportComenziToExcel } from '@/lib/utils';
+import { formatDate, formatCurrency } from '@/lib/utils';
 import ConfirmDeleteModal from '@/components/modals/ConfirmDeleteModal';
 import ComandaModal from '@/components/modals/ComandaModal';
 import FinalizeazaComandaModal from '@/components/modals/FinalizeazaComandaModal';
 import ConfirmFinalizeModal from '@/components/modals/ConfirmFinalizeModal';
 import ExportExcelModal from '@/components/modals/ExportExcelModal';
+import ConfirmInvoiceModal from '@/components/modals/ConfirmInvoiceModal';
 import toast from 'react-hot-toast';
 import OrderStatusProgress from '@/components/OrderStatusProgress';
 
@@ -21,7 +22,7 @@ const statusConfig: Record<OrderStatus, { text: string; bg: string; icon: React.
 };
 
 const Comenzi: React.FC = () => {
-    const { comenzi, doctori, produse, addComanda, updateComanda, deleteComanda, finalizeComanda, reopenComanda } = useData();
+    const { comenzi, doctori, produse, addComanda, updateComanda, deleteComanda, finalizeComanda, reopenComanda, invoiceComanda } = useData();
     const [statusFilter, setStatusFilter] = useState<OrderStatus | 'Toate'>('Toate');
     
     // Search states
@@ -37,6 +38,7 @@ const Comenzi: React.FC = () => {
     const [isFinalizeModalOpen, setFinalizeModalOpen] = useState(false);
     const [isConfirmFinalizeModalOpen, setConfirmFinalizeModalOpen] = useState(false);
     const [isExportModalOpen, setExportModalOpen] = useState(false);
+    const [isInvoiceModalOpen, setInvoiceModalOpen] = useState(false);
 
     // Data for Modals
     const [selectedComanda, setSelectedComanda] = useState<Comanda | null>(null);
@@ -69,6 +71,11 @@ const Comenzi: React.FC = () => {
                 const tehnicianMatch = !appliedFilters.tehnician || (c.tehnician && c.tehnician.toLowerCase().includes(appliedFilters.tehnician.toLowerCase()));
 
                 return doctorMatch && pacientMatch && tehnicianMatch;
+            })
+            .sort((a, b) => {
+                if (!a.created_at) return 1;
+                if (!b.created_at) return -1;
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
             });
     }, [comenzi, statusFilter, appliedFilters, doctori]);
     
@@ -126,13 +133,70 @@ const Comenzi: React.FC = () => {
         }
     };
 
-    const handleExport = (startDate: Date, endDate: Date) => {
+    const handleInvoiceConfirm = () => {
+        if (selectedComanda) {
+            invoiceComanda(selectedComanda.id);
+            setInvoiceModalOpen(false);
+            setSelectedComanda(null);
+        }
+    };
+
+    const handleExport = async (startDate: Date, endDate: Date) => {
         try {
-            exportComenziToExcel(comenzi, doctori, produse, startDate, endDate);
-            toast.success("Exportul a fost inițiat. Verificați descărcările.");
+            const formatDateForAPI = (date: Date) => date.toISOString().split('T')[0];
+            
+            const response = await fetch('/.netlify/functions/exportLaborator', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    startDate: formatDateForAPI(startDate), 
+                    endDate: formatDateForAPI(endDate) 
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Export failed');
+            }
+            
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'export_laborator.zip';
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            toast.success("Exportul a fost realizat cu succes!");
         } catch (error) {
             console.error("Export failed:", error);
-            toast.error("Exportul a eșuat.");
+            toast.error("Exportul a eșuat. Verificați conexiunea.");
+        }
+    };
+
+    const handlePrintOrder = async (orderId: number) => {
+        try {
+            const response = await fetch('/.netlify/functions/printOrder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Print failed');
+            }
+            
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Comanda_${orderId}.xlsx`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            toast.success("Fișierul a fost generat cu succes!");
+        } catch (error) {
+            console.error("Print failed:", error);
+            toast.error("Generarea fișierului a eșuat.");
         }
     };
 
@@ -187,6 +251,7 @@ const Comenzi: React.FC = () => {
                     const pacient = doctor?.pacienti.find(p => p.id === comanda.id_pacient);
                     const status = statusConfig[comanda.status];
                     const isFinalized = comanda.status === 'Finalizată';
+                    const isInvoiced = comanda.facturata;
                     return (
                         <Card key={comanda.id} className="flex flex-col">
                             <CardHeader>
@@ -209,13 +274,21 @@ const Comenzi: React.FC = () => {
                                 {comanda.tehnician && <div className="flex items-center"><HardHat className="w-4 h-4 mr-2 text-gray-500"/> <strong>Tehnician:</strong><span className="ml-auto">{comanda.tehnician}</span></div>}
                             </CardContent>
                             <CardFooter className="flex justify-end gap-2">
-                                {isFinalized ? (
-                                    <Button variant="outline" size="sm" onClick={() => handleOpenReopenModal(comanda)}><RefreshCcw className="w-4 h-4 mr-2"/>Reia</Button>
-                                ) : (
-                                    <Button variant="outline" size="sm" onClick={() => { setSelectedComanda(comanda); setFinalizeModalOpen(true); }}>Finalizează</Button>
+                                <Button variant="outline" size="sm" onClick={() => handlePrintOrder(comanda.id)}>
+                                    <Printer className="w-4 h-4 mr-2"/>Imprimare
+                                </Button>
+                                {isFinalized && !isInvoiced && (
+                                    <Button variant="default" size="sm" onClick={() => { setSelectedComanda(comanda); setInvoiceModalOpen(true); }}>
+                                        <Receipt className="w-4 h-4 mr-2"/>Factureaza
+                                    </Button>
                                 )}
-                                <Button variant="ghost" size="icon" onClick={() => { setSelectedComanda(comanda); setComandaModalOpen(true); }}><Edit className="w-4 h-4" /></Button>
-                                <Button variant="ghost" size="icon" onClick={() => { setSelectedComanda(comanda); setDeleteModalOpen(true); }}><Trash2 className="w-4 h-4 text-danger" /></Button>
+                                {isFinalized && !isInvoiced ? (
+                                    <Button variant="outline" size="sm" onClick={() => handleOpenReopenModal(comanda)}><RefreshCcw className="w-4 h-4 mr-2"/>Reia</Button>
+                                ) : !isInvoiced ? (
+                                    <Button variant="outline" size="sm" onClick={() => { setSelectedComanda(comanda); setFinalizeModalOpen(true); }}>Finalizează</Button>
+                                ) : null}
+                                <Button variant="ghost" size="icon" disabled={isInvoiced} onClick={() => { setSelectedComanda(comanda); setComandaModalOpen(true); }}><Edit className="w-4 h-4" /></Button>
+                                <Button variant="ghost" size="icon" disabled={isInvoiced} onClick={() => { setSelectedComanda(comanda); setDeleteModalOpen(true); }}><Trash2 className="w-4 h-4 text-danger" /></Button>
                             </CardFooter>
                         </Card>
                     )
@@ -239,6 +312,7 @@ const Comenzi: React.FC = () => {
                                         const pacient = doctor?.pacienti.find(p => p.id === comanda.id_pacient);
                                         const status = statusConfig[comanda.status];
                                         const isFinalized = comanda.status === 'Finalizată';
+                                        const isInvoiced = comanda.facturata;
                                         return (
                                             <tr key={comanda.id} className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
                                                 <td className="px-6 py-4">{doctor?.nume || 'N/A'}</td>
@@ -255,13 +329,21 @@ const Comenzi: React.FC = () => {
                                                 </td>
                                                 <td className="px-6 py-4">{comanda.tehnician || 'N/A'}</td>
                                                 <td className="px-6 py-4 flex items-center gap-1">
-                                                    {isFinalized ? (
-                                                        <Button variant="outline" size="sm" onClick={() => handleOpenReopenModal(comanda)}><RefreshCcw className="w-4 h-4 mr-2"/>Reia</Button>
-                                                    ) : (
-                                                        <Button variant="outline" size="sm" onClick={() => { setSelectedComanda(comanda); setFinalizeModalOpen(true); }}>Finalizează</Button>
+                                                    <Button variant="outline" size="sm" onClick={() => handlePrintOrder(comanda.id)}>
+                                                        <Printer className="w-4 h-4 mr-2"/>Imprimare
+                                                    </Button>
+                                                    {isFinalized && !isInvoiced && (
+                                                        <Button variant="default" size="sm" onClick={() => { setSelectedComanda(comanda); setInvoiceModalOpen(true); }}>
+                                                            <Receipt className="w-4 h-4 mr-2"/>Factureaza
+                                                        </Button>
                                                     )}
-                                                    <Button variant="ghost" size="icon" onClick={() => { setSelectedComanda(comanda); setComandaModalOpen(true); }}><Edit className="w-4 h-4" /></Button>
-                                                    <Button variant="ghost" size="icon" onClick={() => { setSelectedComanda(comanda); setDeleteModalOpen(true); }}><Trash2 className="w-4 h-4 text-danger" /></Button>
+                                                    {isFinalized && !isInvoiced ? (
+                                                        <Button variant="outline" size="sm" onClick={() => handleOpenReopenModal(comanda)}><RefreshCcw className="w-4 h-4 mr-2"/>Reia</Button>
+                                                    ) : !isInvoiced ? (
+                                                        <Button variant="outline" size="sm" onClick={() => { setSelectedComanda(comanda); setFinalizeModalOpen(true); }}>Finalizează</Button>
+                                                    ) : null}
+                                                    <Button variant="ghost" size="icon" disabled={isInvoiced} onClick={() => { setSelectedComanda(comanda); setComandaModalOpen(true); }}><Edit className="w-4 h-4" /></Button>
+                                                    <Button variant="ghost" size="icon" disabled={isInvoiced} onClick={() => { setSelectedComanda(comanda); setDeleteModalOpen(true); }}><Trash2 className="w-4 h-4 text-danger" /></Button>
                                                 </td>
                                             </tr>
                                         );
@@ -279,6 +361,7 @@ const Comenzi: React.FC = () => {
             <ConfirmDeleteModal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={handleDeleteConfirm} title="Confirmă Ștergerea Comenzii" description="Ești sigur că vrei să ștergi această comandă?" />
             <ConfirmDeleteModal isOpen={isReopenModalOpen} onClose={() => setReopenModalOpen(false)} onConfirm={handleReopenConfirm} title="Confirmă Redeschiderea" description="Ești sigur că vrei să redeschizi această comandă? Statutul va fi schimbat înapoi la 'În progres'." confirmText="Da, redeschide" />
             <ExportExcelModal isOpen={isExportModalOpen} onClose={() => setExportModalOpen(false)} onExport={handleExport} />
+            <ConfirmInvoiceModal isOpen={isInvoiceModalOpen} onClose={() => setInvoiceModalOpen(false)} onConfirm={handleInvoiceConfirm} />
         </div>
     );
 };

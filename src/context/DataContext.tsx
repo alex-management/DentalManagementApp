@@ -24,6 +24,7 @@ interface DataContextType {
   deleteComanda: (comandaId: number) => void;
   finalizeComanda: (comandaId: number, tehnician: string) => void;
   reopenComanda: (comandaId: number) => void;
+  invoiceComanda: (comandaId: number) => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -122,10 +123,18 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           data_finalizare: r.data_finalizare || undefined,
           status: (r.status as any) || (new Date(r.termen_limita) < new Date() ? 'Întârziată' : 'În progres'),
           tehnician: r.tehnician || undefined,
+          created_at: r.created_at || undefined,
+          facturata: r.facturata || false,
+          data_facturare: r.data_facturare || undefined,
         } as Comanda));
 
         // Keep all loaded comenzi as-is (do not mark or delete), even if related doctor/pacient rows are missing
-        const filteredComenzi = (loadedComenzi || []);
+        // Sort by created_at descending (most recent first)
+        const filteredComenzi = (loadedComenzi || []).sort((a, b) => {
+          if (!a.created_at) return 1;
+          if (!b.created_at) return -1;
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
 
         // update local state
   setProduse(loadedProduse.length ? loadedProduse.sort((a,b) => a.nume.localeCompare(b.nume, 'ro')) : MOCK_PRODUSE);
@@ -234,6 +243,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                     data_finalizare: newRow.data_finalizare || undefined,
                     status: (newRow.status as any) || (new Date(newRow.termen_limita) < new Date() ? 'Întârziată' : 'În progres'),
                     tehnician: newRow.tehnician || undefined,
+                    created_at: newRow.created_at || undefined,
+                    facturata: newRow.facturata || false,
+                    data_facturare: newRow.data_facturare || undefined,
                     invalid: true,
                   };
                   setComenzi(prev => (prev.some(x => x.id === nc.id) ? prev : [...prev, nc]));
@@ -252,8 +264,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                   data_finalizare: newRow.data_finalizare || undefined,
                   status: (newRow.status as any) || (new Date(newRow.termen_limita) < new Date() ? 'Întârziată' : 'În progres'),
                   tehnician: newRow.tehnician || undefined,
+                  created_at: newRow.created_at || undefined,
+                  facturata: newRow.facturata || false,
+                  data_facturare: newRow.data_facturare || undefined,
                 };
-                setComenzi(prev => (prev.some(x => x.id === nc.id) ? prev : [...prev, nc]));
+                setComenzi(prev => [nc, ...prev.filter(x => x.id !== nc.id)]);
               }
             } else if (event === 'UPDATE') {
               const doctorExists = doctoriRef.current.some(d => d.id === Number(newRow.id_doctor));
@@ -632,8 +647,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             id_pacient: finalPacientId,
             total,
             status: new Date(comandaData.termen_limita) < new Date() ? 'Întârziată' : 'În progres',
+            created_at: insertedComanda?.created_at || new Date().toISOString(),
           };
-          setComenzi(prev => (prev.some(c => c.id === newComanda.id) ? prev : [...prev, newComanda]));
+          setComenzi(prev => [newComanda, ...prev.filter(c => c.id !== newComanda.id)]);
           toast.success('Comanda a fost creata cu succes');
         } catch (err) {
           console.error('Supabase addComanda error:', err);
@@ -659,8 +675,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             id_pacient: finalPacientId,
             total,
             status: new Date(comandaData.termen_limita) < new Date() ? 'Întârziată' : 'În progres',
+            created_at: new Date().toISOString(),
           };
-          setComenzi(prev => (prev.some(c => c.id === newComanda.id) ? prev : [...prev, newComanda]));
+          setComenzi(prev => [newComanda, ...prev.filter(c => c.id !== newComanda.id)]);
           toast.error('Eroare la salvarea comenzii în Supabase. Se folosește stocarea locală.');
         }
       })();
@@ -672,8 +689,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         id_pacient: finalPacientId,
         total,
         status: new Date(comandaData.termen_limita) < new Date() ? 'Întârziată' : 'În progres',
+        created_at: new Date().toISOString(),
       };
-  setComenzi(prev => (prev.some(c => c.id === newComanda.id) ? prev : [...prev, newComanda]));
+  setComenzi(prev => [newComanda, ...prev.filter(c => c.id !== newComanda.id)]);
   toast.success('Comanda a fost creata cu succes');
     }
     return { newDoctor, newPacient };
@@ -810,6 +828,43 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     done();
   };
 
+  const invoiceComanda = (comandaId: number) => {
+    const comanda = comenzi.find(c => c.id === comandaId);
+    if (!comanda) {
+      toast.error('Comanda nu a fost găsită.');
+      return;
+    }
+    if (comanda.status !== 'Finalizată') {
+      toast.error('Doar comenzile finalizate pot fi facturate.');
+      return;
+    }
+    if (comanda.facturata) {
+      toast.error('Comanda este deja facturată.');
+      return;
+    }
+
+    const done = async () => {
+      try {
+        if (supabase) {
+          const now = new Date().toISOString();
+          const { error } = await supabase.from('comenzi').update({ facturata: true, data_facturare: now }).eq('id', comandaId);
+          if (error) {
+            console.error('Supabase invoiceComanda error:', error);
+            toast.error('Eroare la marcarea comenzii ca facturată în Supabase. Se folosește actualizarea locală.');
+          }
+          setComenzi(prev => prev.map(c => c.id === comandaId ? { ...c, facturata: true, data_facturare: now } : c));
+        } else {
+          setComenzi(prev => prev.map(c => c.id === comandaId ? { ...c, facturata: true, data_facturare: new Date().toISOString() } : c));
+        }
+        toast.success('Comanda a fost marcată ca facturată.');
+      } catch (err) {
+        console.error('Error invoicing comanda:', err);
+        toast.error('Eroare la facturarea comenzii.');
+      }
+    };
+    done();
+  };
+
   const value = {
       doctori: sortedDoctori,
       comenzi,
@@ -830,6 +885,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       deleteComanda,
       finalizeComanda,
       reopenComanda,
+      invoiceComanda,
   };
 
   return (
