@@ -73,3 +73,12 @@ CREATE TABLE IF NOT EXISTS public.demo_users (
 );
 
 -- Sample seed data for demo_users removed — no test rows will be inserted by default
+
+-- Reset identity sequences to avoid duplicate key errors when rows were inserted with explicit IDs.
+-- Run these statements if you encounter "duplicate key value violates unique constraint" errors.
+SELECT setval(pg_get_serial_sequence('public.comenzi', 'id'), COALESCE((SELECT MAX(id) FROM public.comenzi), 0) + 1, false);
+SELECT setval(pg_get_serial_sequence('public.comanda_produse', 'id'), COALESCE((SELECT MAX(id) FROM public.comanda_produse), 0) + 1, false);
+SELECT setval(pg_get_serial_sequence('public.doctori', 'id'), COALESCE((SELECT MAX(id) FROM public.doctori), 0) + 1, false);
+SELECT setval(pg_get_serial_sequence('public.pacienti', 'id'), COALESCE((SELECT MAX(id) FROM public.pacienti), 0) + 1, false);
+SELECT setval(pg_get_serial_sequence('public.produse', 'id'), COALESCE((SELECT MAX(id) FROM public.produse), 0) + 1, false);
+SELECT setval(pg_get_serial_sequence('public.tehnicieni', 'id'), COALESCE((SELECT MAX(id) FROM public.tehnicieni), 0) + 1, false);
