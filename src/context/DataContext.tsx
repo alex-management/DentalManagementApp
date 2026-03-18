@@ -326,14 +326,30 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     // If Supabase client is configured, persist to Supabase first
     if (supabase) {
       (async () => {
-  const { data, error } = await supabase.from('doctori').insert([{ nume: doctorData.nume, email: doctorData.email, telefon: doctorData.telefon }]).select().single();
-        if (error) {
-          console.error('Supabase addDoctor error:', error);
-          toast.error('Eroare la salvarea doctorului în Supabase. Se folosește stocarea locală.');
+        const maxRetries = 5;
+        let data: any = null;
+        let lastError: any = null;
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          const result = await supabase.from('doctori').insert([{ nume: doctorData.nume, email: doctorData.email, telefon: doctorData.telefon }]).select().single();
+          if (!result.error) {
+            data = result.data;
+            lastError = null;
+            break;
+          }
+          // PostgreSQL duplicate key violation — retry (sequence auto-advances)
+          if (result.error.code === '23505' && attempt < maxRetries - 1) {
+            console.warn(`Duplicate key on doctori insert (attempt ${attempt + 1}/${maxRetries}), retrying...`);
+            continue;
+          }
+          lastError = result.error;
+          break;
+        }
+        if (lastError) {
+          console.error('Supabase addDoctor error:', lastError);
+          toast.error(`Eroare la salvarea doctorului în Supabase: ${lastError.message || lastError}. Se folosește stocarea locală.`);
           const newDoctor: Doctor = { ...doctorData, id: Date.now(), pacienti: [] };
           setDoctori(prev => [...prev, newDoctor]);
         } else if (data) {
-          // Supabase returns the inserted row as an object when using .single()
           const row: any = data;
           const newDoctor: Doctor = { nume: row.nume, email: row.email, telefon: row.telefon, id: row.id ?? Date.now(), pacienti: [] };
           setDoctori(prev => [...prev, newDoctor]);
@@ -419,9 +435,25 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const addProdus = (produsData: Omit<Produs, 'id'>) => {
     if (supabase) {
       (async () => {
-  const { data, error } = await supabase.from('produse').insert([{ nume: produsData.nume, pret: produsData.pret }]).select().single();
-        if (error) {
-          console.error('Supabase addProdus error:', error);
+        const maxRetries = 5;
+        let data: any = null;
+        let lastError: any = null;
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          const result = await supabase.from('produse').insert([{ nume: produsData.nume, pret: produsData.pret }]).select().single();
+          if (!result.error) {
+            data = result.data;
+            lastError = null;
+            break;
+          }
+          if (result.error.code === '23505' && attempt < maxRetries - 1) {
+            console.warn(`Duplicate key on produse insert (attempt ${attempt + 1}/${maxRetries}), retrying...`);
+            continue;
+          }
+          lastError = result.error;
+          break;
+        }
+        if (lastError) {
+          console.error('Supabase addProdus error:', lastError);
           const newProdus: Produs = { ...produsData, id: Date.now() };
           setProduse(prev => [...prev, newProdus]);
           toast.error('Eroare la salvarea produsului în Supabase. Se folosește stocarea locală.');
@@ -477,9 +509,25 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const addTehnician = (tehnicianData: Omit<Tehnician, 'id'>) => {
     if (supabase) {
       (async () => {
-  const { data, error } = await supabase.from('tehnicieni').insert([{ nume: tehnicianData.nume }]).select().single();
-        if (error) {
-          console.error('Supabase addTehnician error:', error);
+        const maxRetries = 5;
+        let data: any = null;
+        let lastError: any = null;
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          const result = await supabase.from('tehnicieni').insert([{ nume: tehnicianData.nume }]).select().single();
+          if (!result.error) {
+            data = result.data;
+            lastError = null;
+            break;
+          }
+          if (result.error.code === '23505' && attempt < maxRetries - 1) {
+            console.warn(`Duplicate key on tehnicieni insert (attempt ${attempt + 1}/${maxRetries}), retrying...`);
+            continue;
+          }
+          lastError = result.error;
+          break;
+        }
+        if (lastError) {
+          console.error('Supabase addTehnician error:', lastError);
           const newTehnician: Tehnician = { ...tehnicianData, id: Date.now() };
           setTehnicieni(prev => [...prev, newTehnician]);
           toast.error('Eroare la salvarea tehnicianului în Supabase. Se folosește stocarea locală.');
@@ -552,23 +600,43 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       }
     }
     
-    const subtotal = comandaData.produse.reduce((acc: number, p: any) => {
+    // Normalize produse cantitate to numbers (input fields may pass strings)
+    const normalizedProduse = comandaData.produse.map((p: any) => ({
+      ...p,
+      id_produs: Number(p.id_produs),
+      cantitate: Number(p.cantitate) || 1,
+    }));
+    comandaData.produse = normalizedProduse;
+
+    const subtotal = normalizedProduse.reduce((acc: number, p: any) => {
         const produsInfo = produse.find(pr => pr.id === p.id_produs);
         return acc + (produsInfo?.pret || 0) * p.cantitate;
     }, 0);
-    const total = subtotal - (comandaData.reducere || 0);
+    const total = subtotal - (Number(comandaData.reducere) || 0);
 
     // Try to persist to Supabase if available, otherwise fallback to local state.
     if (supabase) {
       (async () => {
         try {
+          const maxRetries = 5;
           // If a new doctor was requested, insert it first into Supabase
           if (comandaData.isNewDoctor) {
              const payloadDoc = { nume: comandaData.id_doctor, email: '', telefon: '' };
              console.debug('Inserting doctor payload:', payloadDoc);
-           const { data: docRows, error: docError } = await supabase!.from('doctori').insert([payloadDoc]).select().single();
-             console.debug('Inserted doctor response:', { docRows, docError });
-            if (docError) throw docError;
+           let docRows: any = null;
+           for (let docAttempt = 0; docAttempt < maxRetries; docAttempt++) {
+             const { data: docData, error: docError } = await supabase!.from('doctori').insert([payloadDoc]).select().single();
+             if (!docError) {
+               docRows = docData;
+               break;
+             }
+             if (docError.code === '23505' && docAttempt < maxRetries - 1) {
+               console.warn(`Duplicate key on doctori insert (attempt ${docAttempt + 1}/${maxRetries}), retrying...`);
+               continue;
+             }
+             throw docError;
+           }
+             console.debug('Inserted doctor response:', { docRows });
             const insertedDoc: any = docRows ? docRows : null;
             if (insertedDoc) {
               newDoctor = { id: insertedDoc.id ?? Date.now(), nume: insertedDoc.nume, email: insertedDoc.email ?? '', telefon: insertedDoc.telefon ?? '', pacienti: [] };
@@ -582,9 +650,20 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           if (comandaData.isNewPacient) {
              const payloadPac = { nume: comandaData.id_pacient, id_doctor: finalDoctorId ? Number(finalDoctorId) : null };
              console.debug('Inserting pacient payload:', payloadPac);
-             const { data: pacRows, error: pacError } = await supabase!.from('pacienti').insert([payloadPac]).select().single();
-             console.debug('Inserted pacient response:', { pacRows, pacError });
-            if (pacError) throw pacError;
+           let pacRows: any = null;
+           for (let pacAttempt = 0; pacAttempt < maxRetries; pacAttempt++) {
+             const { data: pacData, error: pacError } = await supabase!.from('pacienti').insert([payloadPac]).select().single();
+             if (!pacError) {
+               pacRows = pacData;
+               break;
+             }
+             if (pacError.code === '23505' && pacAttempt < maxRetries - 1) {
+               console.warn(`Duplicate key on pacienti insert (attempt ${pacAttempt + 1}/${maxRetries}), retrying...`);
+               continue;
+             }
+             throw pacError;
+           }
+             console.debug('Inserted pacient response:', { pacRows });
             const insertedPac: any = pacRows ? pacRows : null;
             if (insertedPac) {
               newPacient = { id: insertedPac.id ?? Date.now(), nume: insertedPac.nume, id_doctor: insertedPac.id_doctor } as Pacient;
@@ -598,22 +677,50 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             }
           }
 
-          // Insert comanda
-          const { data: comandaRows, error: comandaError } = await supabase!.from('comenzi').insert([{ id_doctor: finalDoctorId, id_pacient: finalPacientId, data_start: comandaData.data_start, termen_limita: comandaData.termen_limita, reducere: comandaData.reducere || 0, total, status: new Date(comandaData.termen_limita) < new Date() ? 'Întârziată' : 'În progres' }]).select().single();
-          if (comandaError) throw comandaError;
-          const insertedComanda: any = comandaRows ? comandaRows : null;
+          // Insert comanda — format dates as YYYY-MM-DD for DATE columns and ensure numeric types
+          // Retry logic: if the identity sequence is out of sync, a duplicate key error (23505)
+          // can occur. The sequence advances on each failed attempt, so retrying resolves it.
+          const formatDate = (isoStr: string) => new Date(isoStr).toISOString().split('T')[0];
+          const comandaPayload = {
+            id_doctor: Number(finalDoctorId),
+            id_pacient: Number(finalPacientId),
+            data_start: formatDate(comandaData.data_start),
+            termen_limita: formatDate(comandaData.termen_limita),
+            reducere: Number(comandaData.reducere) || 0,
+            total: Number(total),
+            status: new Date(comandaData.termen_limita) < new Date() ? 'Întârziată' : 'În progres'
+          };
+          let insertedComanda: any = null;
+          for (let attempt = 0; attempt < maxRetries; attempt++) {
+            const { data: comandaRows, error: comandaError } = await supabase!.from('comenzi').insert([comandaPayload]).select().single();
+            if (!comandaError) {
+              insertedComanda = comandaRows;
+              break;
+            }
+            // PostgreSQL duplicate key violation — retry (sequence auto-advances)
+            if (comandaError.code === '23505' && attempt < maxRetries - 1) {
+              console.warn(`Duplicate key on comenzi insert (attempt ${attempt + 1}/${maxRetries}), retrying...`);
+              continue;
+            }
+            throw comandaError;
+          }
           const comandaId = Number(insertedComanda?.id ?? Date.now());
 
-          // Insert products into comanda_produse and await all inserts so we can detect errors
+          // Insert products into comanda_produse with retry for duplicate key errors
           const cpPromises = comandaData.produse.map(async (p: any) => {
-             const payloadCP = { comanda_id: Number(comandaId), produs_id: Number(p.id_produs), cantitate: p.cantitate };
+             const payloadCP = { comanda_id: Number(comandaId), produs_id: Number(p.id_produs), cantitate: Number(p.cantitate) || 1 };
              console.debug('Inserting comanda_produse payload:', payloadCP);
-             const { data: cpData, error: cpError } = await supabase!.from('comanda_produse').insert([payloadCP]).select().single();
-            if (cpError) {
-              console.error('Supabase comanda_produse insert error:', cpError);
-              return { success: false, error: cpError };
-            }
-            return { success: true, data: cpData };
+             for (let cpAttempt = 0; cpAttempt < maxRetries; cpAttempt++) {
+               const { data: cpData, error: cpError } = await supabase!.from('comanda_produse').insert([payloadCP]).select().single();
+               if (!cpError) return { success: true, data: cpData };
+               if (cpError.code === '23505' && cpAttempt < maxRetries - 1) {
+                 console.warn(`Duplicate key on comanda_produse insert (attempt ${cpAttempt + 1}/${maxRetries}), retrying...`);
+                 continue;
+               }
+               console.error('Supabase comanda_produse insert error:', cpError);
+               return { success: false, error: cpError };
+             }
+             return { success: false, error: new Error('Max retries exceeded') };
           });
           const cpResults = await Promise.all(cpPromises);
           const cpFailures = cpResults.filter(r => !r.success);
@@ -661,7 +768,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             status: new Date(comandaData.termen_limita) < new Date() ? 'Întârziată' : 'În progres',
           };
           setComenzi(prev => (prev.some(c => c.id === newComanda.id) ? prev : [...prev, newComanda]));
-          toast.error('Eroare la salvarea comenzii în Supabase. Se folosește stocarea locală.');
+          toast.error(`Eroare la salvarea comenzii în Supabase: ${(err as any)?.message || err}. Se folosește stocarea locală.`);
         }
       })();
     } else {
@@ -680,27 +787,51 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateComanda = (updatedComanda: Comanda) => {
-   const subtotal = updatedComanda.produse.reduce((acc: number, p: { id_produs: number; cantitate: number }) => {
+   // Normalize produse cantitate to numbers
+   const normalizedProduse = updatedComanda.produse.map(p => ({
+     ...p,
+     id_produs: Number(p.id_produs),
+     cantitate: Number(p.cantitate) || 1,
+   }));
+   updatedComanda = { ...updatedComanda, produse: normalizedProduse };
+   const subtotal = normalizedProduse.reduce((acc: number, p: { id_produs: number; cantitate: number }) => {
      const produsInfo = produse.find(pr => pr.id === p.id_produs);
      return acc + (produsInfo?.pret || 0) * p.cantitate;
    }, 0);
-    const total = subtotal - (updatedComanda.reducere || 0);
+    const total = subtotal - (Number(updatedComanda.reducere) || 0);
 
     const finalComanda = { ...updatedComanda, total };
 
     if (supabase) {
       (async () => {
         try {
-          const { error } = await supabase.from('comenzi').update({ id_doctor: finalComanda.id_doctor, id_pacient: finalComanda.id_pacient, data_start: finalComanda.data_start, termen_limita: finalComanda.termen_limita, reducere: finalComanda.reducere, total }).eq('id', finalComanda.id);
+          const formatDate = (isoStr: string) => new Date(isoStr).toISOString().split('T')[0];
+          const { error } = await supabase.from('comenzi').update({
+            id_doctor: Number(finalComanda.id_doctor),
+            id_pacient: Number(finalComanda.id_pacient),
+            data_start: formatDate(finalComanda.data_start),
+            termen_limita: formatDate(finalComanda.termen_limita),
+            reducere: Number(finalComanda.reducere) || 0,
+            total: Number(total)
+          }).eq('id', finalComanda.id);
           if (error) throw error;
-          // Replace comanda_produse: delete existing then insert new
+          // Replace comanda_produse: delete existing then insert new with retry for duplicate key errors
           await supabase.from('comanda_produse').delete().eq('comanda_id', finalComanda.id);
           for (const p of finalComanda.produse) {
-            await supabase.from('comanda_produse').insert([{ comanda_id: finalComanda.id, produs_id: p.id_produs, cantitate: p.cantitate }]);
+            const cpPayload = [{ comanda_id: Number(finalComanda.id), produs_id: Number(p.id_produs), cantitate: Number(p.cantitate) || 1 }];
+            for (let cpAttempt = 0; cpAttempt < 5; cpAttempt++) {
+              const { error: cpErr } = await supabase.from('comanda_produse').insert(cpPayload);
+              if (!cpErr) break;
+              if (cpErr.code === '23505' && cpAttempt < 4) {
+                console.warn(`Duplicate key on comanda_produse update-insert (attempt ${cpAttempt + 1}/5), retrying...`);
+                continue;
+              }
+              throw cpErr;
+            }
           }
         } catch (err) {
           console.error('Supabase updateComanda error:', err);
-          toast.error('Eroare la actualizarea comenzii în Supabase. Se folosește actualizarea locală.');
+          toast.error(`Eroare la actualizarea comenzii în Supabase: ${(err as any)?.message || err}`);
         }
         setComenzi(prev => prev.map(c => c.id === finalComanda.id ? finalComanda : c));
         toast.success(`Comanda ${finalComanda.id} a fost actualizată.`);
