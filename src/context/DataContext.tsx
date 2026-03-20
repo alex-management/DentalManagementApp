@@ -51,7 +51,7 @@ interface DataContextType {
   deleteProdus: (produsId: number) => void;
   addTehnician: (tehnician: Omit<Tehnician, 'id'>) => void;
   deleteTehnician: (tehnicianId: number) => void;
-  addComanda: (comanda: Omit<Comanda, 'id' | 'status' | 'total'>) => { newDoctor?: Doctor, newPacient?: Pacient };
+  addComanda: (comanda: Omit<Comanda, 'id' | 'status' | 'total'>) => Promise<{ newDoctor?: Doctor, newPacient?: Pacient }>;
   updateComanda: (comanda: Comanda) => void;
   updateComandaTehnician: (comandaId: number, tehnician: string) => void;
   deleteComanda: (comandaId: number) => void;
@@ -574,7 +574,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Comanda CRUD
-  const addComanda = (comandaData: any) => {
+  const addComanda = async (comandaData: any) => {
     // Normalize: if id_doctor/id_pacient are strings, treat them as new entities
     if (typeof comandaData.id_doctor === 'string') {
       comandaData.id_doctor = comandaData.id_doctor.trim();
@@ -619,7 +619,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
     // Try to persist to Supabase if available, otherwise fallback to local state.
     if (supabase) {
-      (async () => {
+      return (async () => {
         try {
           // If a new doctor was requested, insert it first into Supabase
           if (comandaData.isNewDoctor) {
@@ -694,6 +694,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           };
           setComenzi(prev => (prev.some(c => c.id === newComanda.id) ? prev : [...prev, newComanda]));
           toast.success('Comanda a fost creata cu succes');
+          return { newDoctor, newPacient };
         } catch (err) {
           console.error('Supabase addComanda error:', err);
           const errMsg = (err as any)?.message || (err as any)?.details || 'Eroare necunoscută';
@@ -722,6 +723,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           };
           setComenzi(prev => (prev.some(c => c.id === newComanda.id) ? prev : [...prev, newComanda]));
           toast.error(`Eroare la salvarea comenzii în Supabase: ${errMsg}. Se folosește stocarea locală.`);
+          return { newDoctor, newPacient };
         }
       })();
     } else {

@@ -117,11 +117,12 @@ const Comenzi: React.FC = () => {
         return pages;
     };
 
-    const handleSaveComanda = (comandaData: any) => {
+    const handleSaveComanda = async (comandaData: any) => {
         if (comandaData.id) {
             updateComanda(comandaData);
         } else {
-            addComanda(comandaData);
+            await addComanda(comandaData);
+            setStatusFilter('Toate');
             setCurrentPage(1);
         }
     };
