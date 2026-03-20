@@ -122,6 +122,7 @@ const Comenzi: React.FC = () => {
             updateComanda(comandaData);
         } else {
             addComanda(comandaData);
+            setCurrentPage(1);
         }
     };
 
