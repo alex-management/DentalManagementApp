@@ -5,33 +5,28 @@ import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
 
 /**
- * Helper: insert a row into a Supabase table, retrying with an explicit ID
- * when the auto-increment sequence is out of sync (duplicate key error 23505).
+ * Helper: insert a row into a Supabase table, always computing the next ID
+ * from the current max ID to avoid issues with out-of-sync sequences.
  */
 async function supabaseInsertWithRetry(
   table: string,
   data: Record<string, any>,
   retries = 3
 ): Promise<{ data: any; error: any }> {
-  // First attempt: let the database auto-generate the ID
-  let result = await supabase!.from(table).insert([data]).select().single();
-  if (!result.error) return result;
+  // Always fetch max id and insert with explicit id to avoid sequence sync issues
+  const { data: maxRow } = await supabase!
+    .from(table)
+    .select('id')
+    .order('id', { ascending: false })
+    .limit(1);
+  const maxId = maxRow && maxRow[0] ? Number(maxRow[0].id) : 0;
 
-  // If duplicate key error, fetch max id and retry with explicit id
-  if (result.error.code === '23505' && retries > 0) {
-    console.warn(`[supabaseInsertWithRetry] Duplicate key on "${table}", fetching max id to retry...`);
-    const { data: maxRow } = await supabase!
-      .from(table)
-      .select('id')
-      .order('id', { ascending: false })
-      .limit(1);
-    const maxId = maxRow && maxRow[0] ? Number(maxRow[0].id) : 0;
-
-    for (let i = 1; i <= retries; i++) {
-      result = await supabase!.from(table).insert([{ ...data, id: maxId + i }]).select().single();
-      if (!result.error || result.error.code !== '23505') return result;
-      console.warn(`[supabaseInsertWithRetry] Retry ${i} on "${table}" with id=${maxId + i} still conflicted`);
-    }
+  let result: { data: any; error: any } = { data: null, error: null };
+  for (let i = 1; i <= retries; i++) {
+    result = await supabase!.from(table).insert([{ ...data, id: maxId + i }]).select().single();
+    if (!result.error) return result;
+    if (result.error.code !== '23505') return result; // non-duplicate error, stop
+    console.warn(`[supabaseInsertWithRetry] Duplicate key on "${table}" with id=${maxId + i}, retrying...`);
   }
 
   return result;
