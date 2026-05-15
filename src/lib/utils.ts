@@ -135,7 +135,7 @@ const buildDoctorWorkbook = (
 
     // Grand total row
     const grandTotal = orderTotalRows.reduce((sum, row) => sum + (sheetData[row][3] as number), 0);
-    sheetData.push(['TOTAL GENERAL', null, null, grandTotal]);
+    sheetData.push(['TOTAL', null, null, grandTotal]);
     merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 2 } });
     const grandTotalRow = currentRow;
 
