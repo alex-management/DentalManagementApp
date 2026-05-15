@@ -135,7 +135,8 @@ const buildDoctorWorkbook = (
 
     // Grand total row
     const grandTotal = orderTotalRows.reduce((sum, row) => sum + (sheetData[row][3] as number), 0);
-    sheetData.push(['TOTAL', null, null, grandTotal]);
+    sheetData.push(['TOTAL GENERAL', null, null, grandTotal]);
+    merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 2 } });
     const grandTotalRow = currentRow;
 
     // Create worksheet
@@ -290,7 +291,7 @@ const buildDoctorWorkbook = (
         ws[cellRef].s = {
             font: { bold: true },
             fill: { fgColor: { rgb: "FFF3CD" } },
-            alignment: { horizontal: c === 0 ? 'left' : 'center', vertical: 'center' },
+            alignment: { horizontal: 'center', vertical: 'center' },
             border: allBorders,
             ...(c === 3 ? { numFmt: '0.00' } : {}),
         };
