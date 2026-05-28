@@ -215,26 +215,8 @@ const ComandaModal: React.FC<ComandaModalProps> = ({ isOpen, onClose, onSave, co
                   setDoctorSearch(val);
                   setDoctorInput(val);
                   setShowDoctorSuggestions(true);
-                  const trimmed = val.trim().toLowerCase();
-                  // if the typed value exactly matches an existing doctor, auto-select them
-                  const exactMatch = doctori.find(d => d.nume.toLowerCase() === trimmed);
-                  if (exactMatch) {
-                    setSelectedDoctorId(exactMatch.id);
-                    setPacientInput('');
-                    setPacientSearch('');
-                    setShowDoctorSuggestions(false);
-                  } else {
-                    // if there's exactly one filtered option and the user typed at least 2 chars,
-                    // auto-select it so pacient list updates while typing (good for tablets/phones)
-                    const options = doctori.filter(d => d.nume.toLowerCase().includes(trimmed));
-                    if (trimmed.length >= 2 && options.length === 1) {
-                      setSelectedDoctorId(options[0].id);
-                      setPacientInput('');
-                      setPacientSearch('');
-                    } else {
-                      if (typeof selectedDoctorId === 'number') setSelectedDoctorId(null);
-                    }
-                  }
+                  // Reset doctor selection when user is typing (they must click a suggestion to select)
+                  if (typeof selectedDoctorId === 'number') setSelectedDoctorId(null);
                 }}
                 onFocus={() => setShowDoctorSuggestions(true)}
                 onBlur={() => setTimeout(() => setShowDoctorSuggestions(false), 150)}
@@ -285,21 +267,6 @@ const ComandaModal: React.FC<ComandaModalProps> = ({ isOpen, onClose, onSave, co
                   setPacientSearch(val);
                   setPacientInput(val);
                   setShowPacientSuggestions(true);
-                  const trimmed = val.trim().toLowerCase();
-                  // exact match -> select immediately
-                  const exact = pacientiList.find(p => p.nume.toLowerCase() === trimmed);
-                  if (exact) {
-                    setPacientInput(exact.nume);
-                    setPacientSearch('');
-                    setShowPacientSuggestions(false);
-                  } else {
-                    const options = pacientiList.filter(p => p.nume.toLowerCase().includes(trimmed));
-                    if (trimmed.length >= 2 && options.length === 1) {
-                      setPacientInput(options[0].nume);
-                      setPacientSearch('');
-                      setShowPacientSuggestions(false);
-                    }
-                  }
                 }}
                 onFocus={() => setShowPacientSuggestions(true)}
                 onBlur={() => setTimeout(() => setShowPacientSuggestions(false), 150)}
