@@ -96,13 +96,31 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       try {
         console.debug('Loading data from Supabase...');
 
-        const [{ data: doctorRows, error: doctorErr } = {} as any, { data: pacientRows, error: pacientErr } = {} as any, { data: produsRows, error: produsErr } = {} as any, { data: tehnicianRows, error: tehnicianErr } = {} as any, { data: comenziRows, error: comenziErr } = {} as any] = await Promise.all([
+        const [{ data: doctorRows, error: doctorErr } = {} as any, { data: pacientRows, error: pacientErr } = {} as any, { data: produsRows, error: produsErr } = {} as any, { data: tehnicianRows, error: tehnicianErr } = {} as any] = await Promise.all([
           supabase!.from('doctori').select('*'),
           supabase!.from('pacienti').select('*'),
           supabase!.from('produse').select('*'),
           supabase!.from('tehnicieni').select('*'),
-          supabase!.from('comenzi').select('*').limit(10000),
         ]);
+
+        // Fetch ALL comenzi rows using pagination to avoid server row limits
+        let comenziRows: any[] = [];
+        let comenziErr: any = null;
+        {
+          const PAGE_SIZE = 1000;
+          let from = 0;
+          while (true) {
+            const { data: batch, error: batchErr } = await supabase!
+              .from('comenzi')
+              .select('*')
+              .range(from, from + PAGE_SIZE - 1);
+            if (batchErr) { comenziErr = batchErr; break; }
+            if (batch) comenziRows = comenziRows.concat(batch);
+            if (!batch || batch.length < PAGE_SIZE) break;
+            from += PAGE_SIZE;
+          }
+          console.debug('[DataLoad] comenzi: fetched', comenziRows.length, 'rows total');
+        }
 
         // Fetch ALL comanda_produse rows using pagination to avoid server row limits
         let cpRows: any[] = [];
