@@ -4,6 +4,34 @@ import { MOCK_DOCTORI, MOCK_COMENZI, MOCK_PRODUSE, MOCK_TEHNICIENI } from '@/dat
 import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
 
+/**
+ * Helper: insert a row into a Supabase table, always computing the next ID
+ * from the current max ID to avoid issues with out-of-sync sequences.
+ */
+async function supabaseInsertWithRetry(
+  table: string,
+  data: Record<string, any>,
+  retries = 3
+): Promise<{ data: any; error: any }> {
+  // Always fetch max id and insert with explicit id to avoid sequence sync issues
+  const { data: maxRow } = await supabase!
+    .from(table)
+    .select('id')
+    .order('id', { ascending: false })
+    .limit(1);
+  const maxId = maxRow && maxRow[0] ? Number(maxRow[0].id) : 0;
+
+  let result: { data: any; error: any } = { data: null, error: null };
+  for (let i = 1; i <= retries; i++) {
+    result = await supabase!.from(table).insert([{ ...data, id: maxId + i }]).select().single();
+    if (!result.error) return result;
+    if (result.error.code !== '23505') return result; // non-duplicate error, stop
+    console.warn(`[supabaseInsertWithRetry] Duplicate key on "${table}" with id=${maxId + i}, retrying...`);
+  }
+
+  return result;
+}
+
 interface DataContextType {
   doctori: Doctor[];
   comenzi: Comanda[];
@@ -18,7 +46,7 @@ interface DataContextType {
   deleteProdus: (produsId: number) => void;
   addTehnician: (tehnician: Omit<Tehnician, 'id'>) => void;
   deleteTehnician: (tehnicianId: number) => void;
-  addComanda: (comanda: Omit<Comanda, 'id' | 'status' | 'total'>) => { newDoctor?: Doctor, newPacient?: Pacient };
+  addComanda: (comanda: Omit<Comanda, 'id' | 'status' | 'total'>) => Promise<{ newDoctor?: Doctor, newPacient?: Pacient }>;
   updateComanda: (comanda: Comanda) => void;
   updateComandaTehnician: (comandaId: number, tehnician: string) => void;
   deleteComanda: (comandaId: number) => void;
@@ -68,14 +96,32 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       try {
         console.debug('Loading data from Supabase...');
 
-        const [{ data: doctorRows, error: doctorErr } = {} as any, { data: pacientRows, error: pacientErr } = {} as any, { data: produsRows, error: produsErr } = {} as any, { data: tehnicianRows, error: tehnicianErr } = {} as any, { data: comenziRows, error: comenziErr } = {} as any, { data: cpRows, error: cpErr } = {} as any] = await Promise.all([
+        const [{ data: doctorRows, error: doctorErr } = {} as any, { data: pacientRows, error: pacientErr } = {} as any, { data: produsRows, error: produsErr } = {} as any, { data: tehnicianRows, error: tehnicianErr } = {} as any, { data: comenziRows, error: comenziErr } = {} as any] = await Promise.all([
           supabase!.from('doctori').select('*'),
           supabase!.from('pacienti').select('*'),
           supabase!.from('produse').select('*'),
           supabase!.from('tehnicieni').select('*'),
-          supabase!.from('comenzi').select('*'),
-          supabase!.from('comanda_produse').select('*'),
+          supabase!.from('comenzi').select('*').limit(10000),
         ]);
+
+        // Fetch ALL comanda_produse rows using pagination to avoid server row limits
+        let cpRows: any[] = [];
+        let cpErr: any = null;
+        {
+          const PAGE_SIZE = 1000;
+          let from = 0;
+          while (true) {
+            const { data: batch, error: batchErr } = await supabase!
+              .from('comanda_produse')
+              .select('*')
+              .range(from, from + PAGE_SIZE - 1);
+            if (batchErr) { cpErr = batchErr; break; }
+            if (batch) cpRows = cpRows.concat(batch);
+            if (!batch || batch.length < PAGE_SIZE) break;
+            from += PAGE_SIZE;
+          }
+          console.debug('[DataLoad] comanda_produse: fetched', cpRows.length, 'rows total');
+        }
 
         if (doctorErr || pacientErr || produsErr || tehnicianErr || comenziErr || cpErr) {
           console.error('Supabase load errors', { doctorErr, pacientErr, produsErr, tehnicianErr, comenziErr, cpErr });
@@ -126,6 +172,14 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
         // Keep all loaded comenzi as-is (do not mark or delete), even if related doctor/pacient rows are missing
         const filteredComenzi = (loadedComenzi || []);
+
+        // Diagnostic: log how many orders have products loaded
+        const withProducts = filteredComenzi.filter(c => c.produse.length > 0).length;
+        const withoutProducts = filteredComenzi.filter(c => c.produse.length === 0).length;
+        console.debug('[DataLoad] Comenzi:', filteredComenzi.length, '| Cu produse:', withProducts, '| Fără produse:', withoutProducts);
+        if (withoutProducts > 0) {
+          console.warn('[DataLoad] Comenzi fără produse:', filteredComenzi.filter(c => c.produse.length === 0).map(c => c.id));
+        }
 
         // update local state
   setProduse(loadedProduse.length ? loadedProduse.sort((a,b) => a.nume.localeCompare(b.nume, 'ro')) : MOCK_PRODUSE);
@@ -326,7 +380,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     // If Supabase client is configured, persist to Supabase first
     if (supabase) {
       (async () => {
-  const { data, error } = await supabase.from('doctori').insert([{ nume: doctorData.nume, email: doctorData.email, telefon: doctorData.telefon }]).select().single();
+  const { data, error } = await supabaseInsertWithRetry('doctori', { nume: doctorData.nume, email: doctorData.email, telefon: doctorData.telefon });
         if (error) {
           console.error('Supabase addDoctor error:', error);
           toast.error('Eroare la salvarea doctorului în Supabase. Se folosește stocarea locală.');
@@ -419,7 +473,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const addProdus = (produsData: Omit<Produs, 'id'>) => {
     if (supabase) {
       (async () => {
-  const { data, error } = await supabase.from('produse').insert([{ nume: produsData.nume, pret: produsData.pret }]).select().single();
+  const { data, error } = await supabaseInsertWithRetry('produse', { nume: produsData.nume, pret: produsData.pret });
         if (error) {
           console.error('Supabase addProdus error:', error);
           const newProdus: Produs = { ...produsData, id: Date.now() };
@@ -477,7 +531,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const addTehnician = (tehnicianData: Omit<Tehnician, 'id'>) => {
     if (supabase) {
       (async () => {
-  const { data, error } = await supabase.from('tehnicieni').insert([{ nume: tehnicianData.nume }]).select().single();
+  const { data, error } = await supabaseInsertWithRetry('tehnicieni', { nume: tehnicianData.nume });
         if (error) {
           console.error('Supabase addTehnician error:', error);
           const newTehnician: Tehnician = { ...tehnicianData, id: Date.now() };
@@ -515,7 +569,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Comanda CRUD
-  const addComanda = (comandaData: any) => {
+  const addComanda = async (comandaData: any) => {
     // Normalize: if id_doctor/id_pacient are strings, treat them as new entities
     if (typeof comandaData.id_doctor === 'string') {
       comandaData.id_doctor = comandaData.id_doctor.trim();
@@ -560,13 +614,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
     // Try to persist to Supabase if available, otherwise fallback to local state.
     if (supabase) {
-      (async () => {
+      return (async () => {
         try {
           // If a new doctor was requested, insert it first into Supabase
           if (comandaData.isNewDoctor) {
              const payloadDoc = { nume: comandaData.id_doctor, email: '', telefon: '' };
              console.debug('Inserting doctor payload:', payloadDoc);
-           const { data: docRows, error: docError } = await supabase!.from('doctori').insert([payloadDoc]).select().single();
+           const { data: docRows, error: docError } = await supabaseInsertWithRetry('doctori', payloadDoc);
              console.debug('Inserted doctor response:', { docRows, docError });
             if (docError) throw docError;
             const insertedDoc: any = docRows ? docRows : null;
@@ -582,7 +636,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           if (comandaData.isNewPacient) {
              const payloadPac = { nume: comandaData.id_pacient, id_doctor: finalDoctorId ? Number(finalDoctorId) : null };
              console.debug('Inserting pacient payload:', payloadPac);
-             const { data: pacRows, error: pacError } = await supabase!.from('pacienti').insert([payloadPac]).select().single();
+             const { data: pacRows, error: pacError } = await supabaseInsertWithRetry('pacienti', payloadPac);
              console.debug('Inserted pacient response:', { pacRows, pacError });
             if (pacError) throw pacError;
             const insertedPac: any = pacRows ? pacRows : null;
@@ -599,16 +653,16 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           }
 
           // Insert comanda
-          const { data: comandaRows, error: comandaError } = await supabase!.from('comenzi').insert([{ id_doctor: finalDoctorId, id_pacient: finalPacientId, data_start: comandaData.data_start, termen_limita: comandaData.termen_limita, reducere: comandaData.reducere || 0, total, status: new Date(comandaData.termen_limita) < new Date() ? 'Întârziată' : 'În progres' }]).select().single();
+          const { data: comandaRows, error: comandaError } = await supabaseInsertWithRetry('comenzi', { id_doctor: finalDoctorId, id_pacient: finalPacientId, data_start: comandaData.data_start, termen_limita: comandaData.termen_limita, reducere: comandaData.reducere || 0, total, status: new Date(comandaData.termen_limita) < new Date() ? 'Întârziată' : 'În progres' });
           if (comandaError) throw comandaError;
           const insertedComanda: any = comandaRows ? comandaRows : null;
           const comandaId = Number(insertedComanda?.id ?? Date.now());
 
           // Insert products into comanda_produse and await all inserts so we can detect errors
           const cpPromises = comandaData.produse.map(async (p: any) => {
-             const payloadCP = { comanda_id: Number(comandaId), produs_id: Number(p.id_produs), cantitate: p.cantitate };
+             const payloadCP = { comanda_id: Number(comandaId), produs_id: Number(p.id_produs), cantitate: Number(p.cantitate) || 0 };
              console.debug('Inserting comanda_produse payload:', payloadCP);
-             const { data: cpData, error: cpError } = await supabase!.from('comanda_produse').insert([payloadCP]).select().single();
+             const { data: cpData, error: cpError } = await supabaseInsertWithRetry('comanda_produse', payloadCP);
             if (cpError) {
               console.error('Supabase comanda_produse insert error:', cpError);
               return { success: false, error: cpError };
@@ -635,8 +689,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           };
           setComenzi(prev => (prev.some(c => c.id === newComanda.id) ? prev : [...prev, newComanda]));
           toast.success('Comanda a fost creata cu succes');
+          return { newDoctor, newPacient };
         } catch (err) {
           console.error('Supabase addComanda error:', err);
+          const errMsg = (err as any)?.message || (err as any)?.details || 'Eroare necunoscută';
           // fallback to local: if newDoctor/newPacient weren't created locally yet, create them now
           if (comandaData.isNewDoctor && !newDoctor) {
             newDoctor = { id: Date.now(), nume: comandaData.id_doctor, email: '', telefon: '', pacienti: [] };
@@ -661,7 +717,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             status: new Date(comandaData.termen_limita) < new Date() ? 'Întârziată' : 'În progres',
           };
           setComenzi(prev => (prev.some(c => c.id === newComanda.id) ? prev : [...prev, newComanda]));
-          toast.error('Eroare la salvarea comenzii în Supabase. Se folosește stocarea locală.');
+          toast.error(`Eroare la salvarea comenzii în Supabase: ${errMsg}. Se folosește stocarea locală.`);
+          return { newDoctor, newPacient };
         }
       })();
     } else {
@@ -696,7 +753,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           // Replace comanda_produse: delete existing then insert new
           await supabase.from('comanda_produse').delete().eq('comanda_id', finalComanda.id);
           for (const p of finalComanda.produse) {
-            await supabase.from('comanda_produse').insert([{ comanda_id: finalComanda.id, produs_id: p.id_produs, cantitate: p.cantitate }]);
+            await supabaseInsertWithRetry('comanda_produse', { comanda_id: finalComanda.id, produs_id: p.id_produs, cantitate: Number(p.cantitate) || 0 });
           }
         } catch (err) {
           console.error('Supabase updateComanda error:', err);
