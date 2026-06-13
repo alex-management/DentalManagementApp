@@ -41,14 +41,19 @@ export const formatCurrency = (amount: number) => {
 const buildDoctorWorkbook = (
     doctor: Doctor,
     comenziDoctor: Comanda[],
-    produse: Produs[]
+    produse: Produs[],
+    allPacienti: Pacient[] = []
 ): XLSX.WorkBook => {
     // Build one section per ORDER (not grouped by patient).
     // Each order shows: patient name, products, order total.
     const orderSections: { pacientName: string; products: { name: string; cantitate: number; pret: number }[] }[] = [];
 
     comenziDoctor.forEach(comanda => {
-        const pacient = doctor.pacienti.find(p => p.id === comanda.id_pacient);
+        // Resolve the patient from the full patient list first so names still show
+        // even when the patient is not attached to this order's doctor; fall back
+        // to the doctor's own list for backward compatibility.
+        const pacient = allPacienti.find(p => p.id === comanda.id_pacient)
+            || doctor.pacienti.find(p => p.id === comanda.id_pacient);
         const pacientName = pacient?.nume || 'N/A';
 
         const products: { name: string; cantitate: number; pret: number }[] = [];
@@ -360,7 +365,8 @@ export const exportComenziToExcel = (
     doctori: Doctor[],
     produse: Produs[],
     startDate: Date,
-    endDate: Date
+    endDate: Date,
+    pacienti: Pacient[] = []
 ) => {
     const startStr = dateToLocalStr(startDate);
     const endStr = dateToLocalStr(endDate);
@@ -415,7 +421,11 @@ export const exportComenziToExcel = (
         const doctor = doctori.find(d => d.id === Number(doctorId));
         if (!doctor) continue;
 
-        const wb = buildDoctorWorkbook(doctor, groupedByDoctor[doctorId], produse);
+        // Resolve patient names from the complete patients list so they show even
+        // when a patient is not attached to this order's doctor; fall back to the
+        // doctor-nested list for backward compatibility.
+        const allPacienti = pacienti.length ? pacienti : doctori.flatMap(d => d.pacienti);
+        const wb = buildDoctorWorkbook(doctor, groupedByDoctor[doctorId], produse, allPacienti);
         const filename = `${doctor.nume.replace(/\s/g, '_')}_${format(startDate, 'dd-MM-yyyy')}_${format(endDate, 'dd-MM-yyyy')}.xlsx`;
         XLSX.writeFile(wb, filename);
     }
@@ -426,7 +436,8 @@ export const exportAllComenziToZip = async (
     doctori: Doctor[],
     produse: Produs[],
     startDate: Date,
-    endDate: Date
+    endDate: Date,
+    pacienti: Pacient[] = []
 ) => {
     const startStr = dateToLocalStr(startDate);
     const endStr = dateToLocalStr(endDate);
@@ -487,7 +498,11 @@ export const exportAllComenziToZip = async (
         const doctor = doctori.find(d => d.id === Number(doctorId));
         if (!doctor) continue;
 
-        const wb = buildDoctorWorkbook(doctor, groupedByDoctor[doctorId], produse);
+        // Resolve patient names from the complete patients list so they show even
+        // when a patient is not attached to this order's doctor; fall back to the
+        // doctor-nested list for backward compatibility.
+        const allPacienti = pacienti.length ? pacienti : doctori.flatMap(d => d.pacienti);
+        const wb = buildDoctorWorkbook(doctor, groupedByDoctor[doctorId], produse, allPacienti);
         const wbBinary = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
         const filename = `${doctor.nume.replace(/\s/g, '_')}.xlsx`;
         zip.file(filename, wbBinary);

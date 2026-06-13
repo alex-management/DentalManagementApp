@@ -32,6 +32,29 @@ async function supabaseInsertWithRetry(
   return result;
 }
 
+/**
+ * Fetch ALL rows from a table using range pagination.
+ * Supabase caps a single select('*') at 1000 rows by default, so larger
+ * tables (e.g. pacienti) must be read page by page or later rows are silently
+ * dropped — which previously made orders referencing those rows show "N/A".
+ */
+async function supabaseFetchAll(table: string): Promise<{ data: any[]; error: any }> {
+  const PAGE_SIZE = 1000;
+  let rows: any[] = [];
+  let from = 0;
+  while (true) {
+    const { data: batch, error } = await supabase!
+      .from(table)
+      .select('*')
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) return { data: rows, error };
+    if (batch) rows = rows.concat(batch);
+    if (!batch || batch.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  return { data: rows, error: null };
+}
+
 interface DataContextType {
   doctori: Doctor[];
   comenzi: Comanda[];
@@ -97,11 +120,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         console.debug('Loading data from Supabase...');
 
         const [{ data: doctorRows, error: doctorErr } = {} as any, { data: pacientRows, error: pacientErr } = {} as any, { data: produsRows, error: produsErr } = {} as any, { data: tehnicianRows, error: tehnicianErr } = {} as any] = await Promise.all([
-          supabase!.from('doctori').select('*'),
-          supabase!.from('pacienti').select('*'),
-          supabase!.from('produse').select('*'),
-          supabase!.from('tehnicieni').select('*'),
+          supabaseFetchAll('doctori'),
+          supabaseFetchAll('pacienti'),
+          supabaseFetchAll('produse'),
+          supabaseFetchAll('tehnicieni'),
         ]);
+        console.debug('[DataLoad] pacienti: fetched', (pacientRows || []).length, 'rows total');
 
         // Fetch ALL comenzi rows using pagination to avoid server row limits
         let comenziRows: any[] = [];

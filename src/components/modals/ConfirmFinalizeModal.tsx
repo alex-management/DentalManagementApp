@@ -16,13 +16,13 @@ interface ConfirmFinalizeModalProps {
 }
 
 const ConfirmFinalizeModal: React.FC<ConfirmFinalizeModalProps> = ({ isOpen, onClose, onConfirm, data, viewOnly }) => {
-  const { doctori, produse: allProduse } = useData();
+  const { doctori, pacienti, produse: allProduse } = useData();
 
   const details = useMemo(() => {
     if (!data) return null;
     const { comanda, tehnician } = data;
     const doctor = doctori.find(d => d.id === comanda.id_doctor);
-    const pacient = doctor?.pacienti.find(p => p.id === comanda.id_pacient);
+    const pacient = pacienti.find(p => p.id === comanda.id_pacient);
     const total = comanda.produse.reduce((acc, p) => {
         const produsInfo = allProduse.find(pr => pr.id === p.id_produs);
         return acc + (produsInfo?.pret || 0) * p.cantitate;
@@ -41,7 +41,7 @@ const ConfirmFinalizeModal: React.FC<ConfirmFinalizeModalProps> = ({ isOpen, onC
         total: formatCurrency(total),
         tehnician
     };
-  }, [data, doctori, allProduse]);
+  }, [data, doctori, pacienti, allProduse]);
 
   if (!details) return null;
 

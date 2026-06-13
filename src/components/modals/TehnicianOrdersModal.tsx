@@ -1,6 +1,6 @@
 import React, { Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import { Comanda, Doctor } from '@/lib/types';
+import { Comanda, Pacient } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { formatCurrency } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -10,11 +10,11 @@ interface Props {
   onClose: () => void;
   tehnicianName: string | null;
   orders: Comanda[];
-  doctori: Doctor[];
+  pacienti: Pacient[];
   onOpenComanda?: (comanda: Comanda) => void;
 }
 
-const TehnicianOrdersModal: React.FC<Props> = ({ isOpen, onClose, tehnicianName, orders, doctori, onOpenComanda }) => {
+const TehnicianOrdersModal: React.FC<Props> = ({ isOpen, onClose, tehnicianName, orders, pacienti, onOpenComanda }) => {
   return (
     <Transition appear show={isOpen} as={Fragment}>
       <Dialog as="div" className="relative z-50" onClose={onClose}>
@@ -46,9 +46,9 @@ const TehnicianOrdersModal: React.FC<Props> = ({ isOpen, onClose, tehnicianName,
                         </thead>
                         <tbody>
                           {orders.map(o => {
-                            // try to resolve pacient name from doctori
-                            const doc = doctori.find(d => d.id === o.id_doctor);
-                            const pacient = doc?.pacienti.find(p => p.id === o.id_pacient);
+                            // Resolve pacient name by id directly from the patients table
+                            // (pacienti), so it works even for patients not attached to a doctor.
+                            const pacient = pacienti.find(p => p.id === o.id_pacient);
                             const pacientName = pacient ? pacient.nume : `#${o.id_pacient}`;
                             return (
                               <tr key={o.id} className="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
