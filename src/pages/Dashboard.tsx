@@ -9,7 +9,7 @@ import { ShoppingCart, CheckCircle, AlertCircle, UserCheck } from 'lucide-react'
 import { isThisMonth, parseISO, getMonth, getYear } from 'date-fns';
 
 const Dashboard: React.FC = () => {
-  const { comenzi, tehnicieni, doctori, addComanda, updateComanda, finalizeComanda } = useData();
+  const { comenzi, tehnicieni, pacienti, addComanda, updateComanda, finalizeComanda } = useData();
 
   const dashboardData = useMemo(() => {
     const revenueThisMonth = comenzi
@@ -300,7 +300,7 @@ const Dashboard: React.FC = () => {
             }
             return true;
           })}
-          doctori={doctori}
+          pacienti={pacienti}
           onOpenComanda={openConfirmFinalizeModal}
         />
       )}

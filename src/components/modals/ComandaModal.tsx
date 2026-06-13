@@ -64,7 +64,7 @@ const ComandaModal: React.FC<ComandaModalProps> = ({ isOpen, onClose, onSave, co
     if (isOpen) {
         if (comanda) {
             const doc = doctori.find(d => d.id === comanda.id_doctor);
-            const pac = doc?.pacienti.find(p => p.id === comanda.id_pacient);
+            const pac = pacienti.find(p => p.id === comanda.id_pacient);
       setDoctorInput(doc?.nume || '');
       setSelectedDoctorId(doc?.id || null);
             setPacientInput(pac?.nume || '');
@@ -90,7 +90,7 @@ const ComandaModal: React.FC<ComandaModalProps> = ({ isOpen, onClose, onSave, co
       setSelectedTehnician('');
         }
     }
-  }, [comanda, isOpen, doctori]);
+  }, [comanda, isOpen, doctori, pacienti]);
 
   const total = useMemo(() => {
     const subtotal = selectedProduse.reduce((acc, p) => {

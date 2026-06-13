@@ -21,7 +21,7 @@ const statusConfig: Record<OrderStatus, { text: string; bg: string; icon: React.
 };
 
 const Comenzi: React.FC = () => {
-    const { comenzi, doctori, produse, addComanda, updateComanda, deleteComanda, finalizeComanda, reopenComanda } = useData();
+    const { comenzi, doctori, pacienti, produse, addComanda, updateComanda, deleteComanda, finalizeComanda, reopenComanda } = useData();
     const [statusFilter, setStatusFilter] = useState<OrderStatus | 'Toate'>('Toate');
     
     // Search states
@@ -68,7 +68,7 @@ const Comenzi: React.FC = () => {
             .filter(c => statusFilter === 'Toate' || c.status === statusFilter)
             .filter(c => {
                 const doctor = doctori.find(d => d.id === c.id_doctor);
-                const pacient = doctor?.pacienti.find(p => p.id === c.id_pacient);
+                const pacient = pacienti.find(p => p.id === c.id_pacient);
 
                 const doctorMatch = !appliedFilters.doctor || doctor?.nume.toLowerCase().includes(appliedFilters.doctor.toLowerCase());
                 const pacientMatch = !appliedFilters.pacient || pacient?.nume.toLowerCase().includes(appliedFilters.pacient.toLowerCase());
@@ -77,7 +77,7 @@ const Comenzi: React.FC = () => {
                 return doctorMatch && pacientMatch && tehnicianMatch;
             })
             .sort((a, b) => b.id - a.id);
-    }, [comenzi, statusFilter, appliedFilters, doctori]);
+    }, [comenzi, statusFilter, appliedFilters, doctori, pacienti]);
     
     const progressStats = useMemo(() => {
         const total = comenzi.length;
@@ -167,7 +167,7 @@ const Comenzi: React.FC = () => {
 
     const handleExport = async (startDate: Date, endDate: Date) => {
         try {
-            await exportAllComenziToZip(comenzi, doctori, produse, startDate, endDate);
+            await exportAllComenziToZip(comenzi, doctori, produse, startDate, endDate, pacienti);
             toast.success("Arhiva ZIP a fost descărcată cu succes.");
         } catch (error: any) {
             console.error("Export failed:", error);
@@ -178,7 +178,7 @@ const Comenzi: React.FC = () => {
     const handlePrintOrder = (comanda: Comanda) => {
         try {
             const doctor = doctori.find(d => d.id === comanda.id_doctor);
-            const pacient = doctor?.pacienti.find(p => p.id === comanda.id_pacient);
+            const pacient = pacienti.find(p => p.id === comanda.id_pacient);
             generateOrderExcel(comanda, doctor, pacient, produse);
             toast.success("Documentul Excel a fost generat cu succes.");
         } catch (error) {
@@ -235,7 +235,7 @@ const Comenzi: React.FC = () => {
             <div className="grid grid-cols-1 lg:hidden gap-4">
                 {paginatedComenzi.map(comanda => {
                     const doctor = doctori.find(d => d.id === comanda.id_doctor);
-                    const pacient = doctor?.pacienti.find(p => p.id === comanda.id_pacient);
+                    const pacient = pacienti.find(p => p.id === comanda.id_pacient);
                     const status = statusConfig[comanda.status];
                     const isFinalized = comanda.status === 'Finalizată';
                     return (
@@ -288,7 +288,7 @@ const Comenzi: React.FC = () => {
                                 <tbody>
                                     {paginatedComenzi.map(comanda => {
                                         const doctor = doctori.find(d => d.id === comanda.id_doctor);
-                                        const pacient = doctor?.pacienti.find(p => p.id === comanda.id_pacient);
+                                        const pacient = pacienti.find(p => p.id === comanda.id_pacient);
                                         const status = statusConfig[comanda.status];
                                         const isFinalized = comanda.status === 'Finalizată';
                                         return (
