@@ -243,6 +243,7 @@ const Comenzi: React.FC = () => {
                             <CardHeader>
                                 <div className="flex justify-between items-start">
                                     <div>
+                                        <p className="text-xs font-mono text-gray-400 dark:text-gray-500">#{comanda.id}</p>
                                         <CardTitle className="text-base">{doctor?.nume}</CardTitle>
                                         <p className="text-sm text-gray-500 dark:text-gray-400">{pacient?.nume}</p>
                                     </div>
@@ -282,7 +283,7 @@ const Comenzi: React.FC = () => {
                             <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
                                 <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
                                     <tr>
-                                        {['Doctor', 'Pacient', 'Total', 'Data Start', 'Termen Limită', 'Data Finalizare', 'Status', 'Tehnician', 'Acțiuni'].map(h => <th key={h} scope="col" className="px-6 py-3 whitespace-nowrap">{h}</th>)}
+                                        {['ID', 'Doctor', 'Pacient', 'Total', 'Data Start', 'Termen Limită', 'Data Finalizare', 'Status', 'Tehnician', 'Acțiuni'].map(h => <th key={h} scope="col" className="px-6 py-3 whitespace-nowrap">{h}</th>)}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -293,6 +294,7 @@ const Comenzi: React.FC = () => {
                                         const isFinalized = comanda.status === 'Finalizată';
                                         return (
                                             <tr key={comanda.id} className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                                                <td className="px-6 py-4 font-mono text-gray-400 dark:text-gray-500">#{comanda.id}</td>
                                                 <td className="px-6 py-4">{doctor?.nume || 'N/A'}</td>
                                                 <td className="px-6 py-4">{pacient?.nume || 'N/A'}</td>
                                                 <td className="px-6 py-4">{formatCurrency(comanda.total)}</td>
