@@ -46,7 +46,7 @@ const buildDoctorWorkbook = (
 ): XLSX.WorkBook => {
     // Build one section per ORDER (not grouped by patient).
     // Each order shows: patient name, products, order total.
-    const orderSections: { pacientName: string; products: { name: string; cantitate: number; pret: number }[] }[] = [];
+    const orderSections: { pacientName: string; products: { name: string; cantitate: number; pret: number }[]; reducere: number }[] = [];
 
     comenziDoctor.forEach(comanda => {
         // Resolve the patient from the full patient list first so names still show
@@ -74,7 +74,7 @@ const buildDoctorWorkbook = (
         });
 
         // Always include the order, even if no products resolved
-        orderSections.push({ pacientName, products });
+        orderSections.push({ pacientName, products, reducere: Number(comanda.reducere) || 0 });
     });
 
     // Build sheet data row by row
@@ -127,7 +127,8 @@ const buildDoctorWorkbook = (
         }
 
         // Total per order row (A-C merged)
-        const orderTotal = section.products.reduce((sum, p) => sum + p.pret * p.cantitate, 0);
+        const orderSubtotal = section.products.reduce((sum, p) => sum + p.pret * p.cantitate, 0);
+        const orderTotal = orderSubtotal - section.reducere;
         sheetData.push(['Total pacient', null, null, orderTotal]);
         merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 2 } });
         orderTotalRows.push(currentRow);
@@ -553,6 +554,7 @@ export const generateOrderExcel = (
     });
 
     // Last line: "Total: {total general}" - Merge A:C
+    grandTotal -= Number(comanda.reducere) || 0;
     const lastRowIndex = sheetData.length;
     sheetData.push([`Total: ${grandTotal.toFixed(2)}`, null, null]);
     merges.push({ s: { r: lastRowIndex, c: 0 }, e: { r: lastRowIndex, c: 2 } });
