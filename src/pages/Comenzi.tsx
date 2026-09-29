@@ -21,7 +21,7 @@ const statusConfig: Record<OrderStatus, { text: string; bg: string; icon: React.
 };
 
 const Comenzi: React.FC = () => {
-    const { comenzi, doctori, pacienti, produse, addComanda, updateComanda, deleteComanda, finalizeComanda, reopenComanda } = useData();
+    const { comenzi, doctori, pacienti, produse, addComanda, updateComanda, deleteComanda, finalizeComanda, reopenComanda, refreshComandaProduse } = useData();
     const [statusFilter, setStatusFilter] = useState<OrderStatus | 'Toate'>('Toate');
     
     // Search states
@@ -148,9 +148,12 @@ const Comenzi: React.FC = () => {
         }
     };
 
-    const handleProceedToFinalize = (tehnician: string) => {
+    const handleProceedToFinalize = async (tehnician: string) => {
         if (selectedComanda) {
-            setDataForFinalization({ comanda: selectedComanda, tehnician });
+            // Load the saved products from the database so the confirmation shows the full order
+            const fresh = await refreshComandaProduse(selectedComanda.id);
+            const comanda = fresh ? { ...selectedComanda, produse: fresh } : selectedComanda;
+            setDataForFinalization({ comanda, tehnician });
             setFinalizeModalOpen(false);
             setConfirmFinalizeModalOpen(true);
         }
