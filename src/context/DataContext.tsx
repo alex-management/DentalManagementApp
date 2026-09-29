@@ -1,5 +1,5 @@
 import React, { createContext, useContext, ReactNode, useState, useMemo } from 'react';
-import { Doctor, Comanda, Produs, Tehnician, Pacient } from '@/lib/types';
+import { Doctor, Comanda, ComandaProdus, Produs, Tehnician, Pacient } from '@/lib/types';
 import { MOCK_DOCTORI, MOCK_COMENZI, MOCK_PRODUSE, MOCK_TEHNICIENI } from '@/data/mock';
 import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
@@ -11,18 +11,20 @@ import toast from 'react-hot-toast';
 async function supabaseInsertWithRetry(
   table: string,
   data: Record<string, any>,
-  retries = 3
+  retries = 5
 ): Promise<{ data: any; error: any }> {
-  // Always fetch max id and insert with explicit id to avoid sequence sync issues
-  const { data: maxRow } = await supabase!
-    .from(table)
-    .select('id')
-    .order('id', { ascending: false })
-    .limit(1);
-  const maxId = maxRow && maxRow[0] ? Number(maxRow[0].id) : 0;
-
+  // Always fetch max id and insert with explicit id to avoid sequence sync issues.
+  // The max id is re-read on every attempt: if another insert grabbed the id in
+  // the meantime, retrying with a stale max would keep colliding and the row
+  // (e.g. a product of an order) would be silently lost.
   let result: { data: any; error: any } = { data: null, error: null };
   for (let i = 1; i <= retries; i++) {
+    const { data: maxRow } = await supabase!
+      .from(table)
+      .select('id')
+      .order('id', { ascending: false })
+      .limit(1);
+    const maxId = maxRow && maxRow[0] ? Number(maxRow[0].id) : 0;
     result = await supabase!.from(table).insert([{ ...data, id: maxId + i }]).select().single();
     if (!result.error) return result;
     if (result.error.code !== '23505') return result; // non-duplicate error, stop
@@ -46,6 +48,7 @@ async function supabaseFetchAll(table: string): Promise<{ data: any[]; error: an
     const { data: batch, error } = await supabase!
       .from(table)
       .select('*')
+      .order('id', { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
     if (error) return { data: rows, error };
     if (batch) rows = rows.concat(batch);
@@ -74,6 +77,7 @@ interface DataContextType {
   updateComandaTehnician: (comandaId: number, tehnician: string) => void;
   deleteComanda: (comandaId: number) => void;
   finalizeComanda: (comandaId: number, tehnician: string) => void;
+  refreshComandaProduse: (comandaId: number) => Promise<ComandaProdus[] | null>;
   reopenComanda: (comandaId: number) => void;
 }
 
@@ -137,6 +141,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             const { data: batch, error: batchErr } = await supabase!
               .from('comenzi')
               .select('*')
+              .order('id', { ascending: true })
               .range(from, from + PAGE_SIZE - 1);
             if (batchErr) { comenziErr = batchErr; break; }
             if (batch) comenziRows = comenziRows.concat(batch);
@@ -156,6 +161,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             const { data: batch, error: batchErr } = await supabase!
               .from('comanda_produse')
               .select('*')
+              .order('id', { ascending: true })
               .range(from, from + PAGE_SIZE - 1);
             if (batchErr) { cpErr = batchErr; break; }
             if (batch) cpRows = cpRows.concat(batch);
@@ -189,11 +195,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         const loadedTehnicieni: Tehnician[] = (tehnicianRows || []).map((r: any) => ({ id: Number(r.id), nume: r.nume }));
 
         // map comanda_produse by comanda_id
-        const cpByComanda = new Map<number, { id_produs: number; cantitate: number }[]>();
+        const cpByComanda = new Map<number, ComandaProdus[]>();
         for (const row of (cpRows || [])) {
-          const comId = Number(row.comanda_id ?? row.comanda_id);
+          const comId = Number(row.comanda_id);
           const arr = cpByComanda.get(comId) || [];
-          arr.push({ id_produs: Number(row.produs_id), cantitate: Number(row.cantitate) });
+          arr.push({ id: Number(row.id), id_produs: Number(row.produs_id), cantitate: Number(row.cantitate) });
           cpByComanda.set(comId, arr);
         }
 
@@ -700,18 +706,21 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           const insertedComanda: any = comandaRows ? comandaRows : null;
           const comandaId = Number(insertedComanda?.id ?? Date.now());
 
-          // Insert products into comanda_produse and await all inserts so we can detect errors
-          const cpPromises = comandaData.produse.map(async (p: any) => {
+          // Insert products into comanda_produse one at a time: inserts compute the
+          // next id from the current max, so parallel inserts collide on the same id
+          // and could exhaust their retries, dropping products from the order.
+          const cpResults: { success: boolean; data?: any; error?: any }[] = [];
+          for (const p of comandaData.produse) {
              const payloadCP = { comanda_id: Number(comandaId), produs_id: Number(p.id_produs), cantitate: Number(p.cantitate) || 0 };
              console.debug('Inserting comanda_produse payload:', payloadCP);
              const { data: cpData, error: cpError } = await supabaseInsertWithRetry('comanda_produse', payloadCP);
             if (cpError) {
               console.error('Supabase comanda_produse insert error:', cpError);
-              return { success: false, error: cpError };
+              cpResults.push({ success: false, error: cpError });
+            } else {
+              cpResults.push({ success: true, data: cpData });
             }
-            return { success: true, data: cpData };
-          });
-          const cpResults = await Promise.all(cpPromises);
+          }
           const cpFailures = cpResults.filter(r => !r.success);
           if (cpFailures.length > 0) {
             console.warn(`${cpFailures.length} inserții comanda_produse au eșuat`, cpFailures);
@@ -720,16 +729,26 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             // suppressed intermediate toast: products saved
           }
 
-          // Update local state with Supabase data
+          // Update local state with Supabase data. Only products actually saved are kept,
+          // so what the app shows matches the database.
+          const savedProduse: ComandaProdus[] = cpResults
+            .filter(r => r.success && r.data)
+            .map(r => ({ id: Number(r.data.id), id_produs: Number(r.data.produs_id), cantitate: Number(r.data.cantitate) }));
           const newComanda: Comanda = {
             ...comandaData,
             id: comandaId,
             id_doctor: finalDoctorId,
             id_pacient: finalPacientId,
+            produse: savedProduse,
             total,
             status: new Date(comandaData.termen_limita) < new Date() ? 'Întârziată' : 'În progres',
           };
-          setComenzi(prev => (prev.some(c => c.id === newComanda.id) ? prev : [...prev, newComanda]));
+          // The realtime INSERT for this order usually arrives first (with no products),
+          // and some realtime product events may be missed; always overwrite the
+          // entry's product list with the saved rows instead of skipping it.
+          setComenzi(prev => (prev.some(c => c.id === newComanda.id)
+            ? prev.map(c => c.id === newComanda.id ? { ...c, produse: savedProduse, invalid: undefined } : c)
+            : [...prev, newComanda]));
           toast.success('Comanda a fost creata cu succes');
           return { newDoctor, newPacient };
         } catch (err) {
@@ -793,10 +812,19 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           const { error } = await supabase.from('comenzi').update({ id_doctor: finalComanda.id_doctor, id_pacient: finalComanda.id_pacient, data_start: finalComanda.data_start, termen_limita: finalComanda.termen_limita, reducere: finalComanda.reducere, total }).eq('id', finalComanda.id);
           if (error) throw error;
           // Replace comanda_produse: delete existing then insert new
-          await supabase.from('comanda_produse').delete().eq('comanda_id', finalComanda.id);
+          const { error: delError } = await supabase.from('comanda_produse').delete().eq('comanda_id', finalComanda.id);
+          if (delError) throw delError;
+          const savedProduse: ComandaProdus[] = [];
           for (const p of finalComanda.produse) {
-            await supabaseInsertWithRetry('comanda_produse', { comanda_id: finalComanda.id, produs_id: p.id_produs, cantitate: Number(p.cantitate) || 0 });
+            const { data: cpData, error: cpError } = await supabaseInsertWithRetry('comanda_produse', { comanda_id: finalComanda.id, produs_id: p.id_produs, cantitate: Number(p.cantitate) || 0 });
+            if (cpError) {
+              console.error('Supabase comanda_produse insert error:', cpError);
+              toast.error('Unele produse nu au fost salvate în baza de date. Verifică consola pentru detalii.');
+            } else if (cpData) {
+              savedProduse.push({ id: Number(cpData.id), id_produs: Number(cpData.produs_id), cantitate: Number(cpData.cantitate) });
+            }
           }
+          finalComanda.produse = savedProduse;
         } catch (err) {
           console.error('Supabase updateComanda error:', err);
           toast.error('Eroare la actualizarea comenzii în Supabase. Se folosește actualizarea locală.');
@@ -842,6 +870,24 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       setComenzi(prev => prev.filter(c => c.id !== comandaId));
       toast.success('Comanda a fost ștearsă.');
     }
+  };
+
+  // Re-read an order's products from Supabase and sync local state, so views like the
+  // finalize confirmation never rely on a product list that missed realtime events.
+  const refreshComandaProduse = async (comandaId: number): Promise<ComandaProdus[] | null> => {
+    if (!supabase) return null;
+    const { data, error } = await supabase
+      .from('comanda_produse')
+      .select('*')
+      .eq('comanda_id', comandaId)
+      .order('id', { ascending: true });
+    if (error || !data) {
+      console.error('Supabase refreshComandaProduse error:', error);
+      return null;
+    }
+    const fresh: ComandaProdus[] = data.map((r: any) => ({ id: Number(r.id), id_produs: Number(r.produs_id), cantitate: Number(r.cantitate) }));
+    setComenzi(prev => prev.map(c => c.id === comandaId ? { ...c, produse: fresh } : c));
+    return fresh;
   };
 
   const finalizeComanda = (comandaId: number, tehnician: string) => {
@@ -928,6 +974,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       updateComandaTehnician,
       deleteComanda,
       finalizeComanda,
+      refreshComandaProduse,
       reopenComanda,
   };
 
